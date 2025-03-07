@@ -117,7 +117,7 @@
         let camera, scene, renderer, ship;
         let skyMaterial, cosmicLights = [];
         let velocity = new THREE.Vector3();
-        const maxSpeed = 0.3, accel = 0.05, friction = 0.95, liftSpeed = 0.2, blastSpeed = 10;
+        const maxSpeed = 0.35, accel = 0.06, friction = 0.97, liftSpeed = 0.2, blastSpeed = 10;
         let keys = { w: false, s: false, a: false, d: false, space: false };
         let isUserInteracting = false, onPointerDownMouseX = 0, onPointerDownMouseY = 0;
         let lon = 0, onPointerDownLon = 0, lat = 0, onPointerDownLat = 0;
@@ -126,18 +126,19 @@
         let joystick, joystickRect, joystickCenterX, joystickCenterY, joystickActive = false, joystickTouchId = null;
         let loadingElement, progressBar;
         let time = 0, spaceHoldTime = 0;
-        let cameraDistance = 15, cameraHeight = 5; // Default camera offset
+        let cameraDistance = 15, cameraHeight = 5;
 
-        // Improved noise for smoother terrain
-        function fractalNoise(x, z, octaves = 3) {
-            let total = 0, frequency = 0.05, amplitude = 1, maxValue = 0;
+        // Enhanced noise for varied terrain
+        function fractalNoise(x, z, octaves = 4) {
+            let total = 0, frequency = 0.03, amplitude = 1, maxValue = 0;
             for (let i = 0; i < octaves; i++) {
                 total += Math.sin(x * frequency) * Math.cos(z * frequency) * amplitude;
+                total += Math.random() * 0.5 * amplitude; // Add randomness
                 maxValue += amplitude;
                 amplitude *= 0.5;
                 frequency *= 2;
             }
-            return total / maxValue * 5;
+            return total / maxValue * 15; // Higher peaks
         }
 
         init();
@@ -149,8 +150,8 @@
 
             // Scene setup
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1500);
-            camera.position.set(0, 10, 15); // Initial position
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.set(0, 10, 15);
 
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -178,7 +179,7 @@
             updateProgress(10);
 
             // Cosmic sky with dynamic shader
-            const skyGeometry = new THREE.SphereGeometry(1000, 60, 40);
+            const skyGeometry = new THREE.SphereGeometry(1500, 60, 40); // Larger sky
             skyGeometry.scale(-1, 1, 1);
 
             const uniforms = {
@@ -219,14 +220,14 @@
             scene.add(sky);
 
             // Cosmic lights
-            for (let i = 0; i < 3; i++) {
-                const lightGeometry = new THREE.SphereGeometry(8 - i * 2, 32, 32);
-                const lightMaterial = new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffaa88 : i === 1 ? 0x88ccff : 0xddaaff });
+            for (let i = 0; i < 4; i++) { // More lights
+                const lightGeometry = new THREE.SphereGeometry(10 - i * 2, 32, 32);
+                const lightMaterial = new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffaa88 : i === 1 ? 0x88ccff : i === 2 ? 0xddaaff : 0xffff88 });
                 const light = new THREE.Mesh(lightGeometry, lightMaterial);
                 scene.add(light);
                 cosmicLights.push(light);
 
-                const pointLight = new THREE.PointLight(lightMaterial.color, 1.5, 800);
+                const pointLight = new THREE.PointLight(lightMaterial.color, 1.5, 1000);
                 pointLight.castShadow = true;
                 pointLight.shadow.mapSize.width = 2048;
                 pointLight.shadow.mapSize.height = 2048;
@@ -236,10 +237,10 @@
             // Nebula particles
             const particleGeometry = new THREE.BufferGeometry();
             const particleVertices = [];
-            for (let i = 0; i < 2000; i++) {
-                const x = (Math.random() - 0.5) * 1200;
-                const y = Math.random() * 600 + 50;
-                const z = (Math.random() - 0.5) * 1200;
+            for (let i = 0; i < 3000; i++) { // More particles
+                const x = (Math.random() - 0.5) * 1800;
+                const y = Math.random() * 800 + 50;
+                const z = (Math.random() - 0.5) * 1800;
                 particleVertices.push(x, y, z);
             }
             particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particleVertices, 3));
@@ -247,21 +248,21 @@
             const particles = new THREE.Points(particleGeometry, particleMaterial);
             scene.add(particles);
 
-            scene.add(new THREE.AmbientLight(0x303050, 0.4));
+            scene.add(new THREE.AmbientLight(0x303050, 0.5));
             updateProgress(40);
         }
 
         function createTerrain() {
             updateProgress(50);
 
-            // Smooth terrain
-            const groundGeometry = new THREE.PlaneGeometry(1000, 1000, 128, 128);
+            // Expanded, varied terrain
+            const groundGeometry = new THREE.PlaneGeometry(2000, 2000, 256, 256); // Bigger and denser
             groundGeometry.rotateX(-Math.PI / 2);
             const vertices = groundGeometry.attributes.position.array;
             for (let i = 0; i < vertices.length; i += 3) {
                 const x = vertices[i], z = vertices[i + 2];
                 const distance = Math.sqrt(x * x + z * z);
-                vertices[i + 1] = fractalNoise(x, z) * (1 - Math.min(1, distance / 250));
+                vertices[i + 1] = fractalNoise(x, z) * (1 - Math.min(1, distance / 500));
             }
             groundGeometry.computeVertexNormals();
 
@@ -270,7 +271,8 @@
                 roughness: 0.8,
                 metalness: 0.25,
                 emissive: 0x102030,
-                emissiveIntensity: 0.5
+                emissiveIntensity: 0.5,
+                vertexColors: true // For dynamic tint
             });
             const ground = new THREE.Mesh(groundGeometry, groundMaterial);
             ground.receiveShadow = true;
@@ -318,24 +320,24 @@
 
         function addEnvironmentDetails() {
             // Glowing orbs
-            for (let i = 0; i < 15; i++) {
-                const orbGeometry = new THREE.SphereGeometry(Math.random() * 4 + 2, 16, 16);
+            for (let i = 0; i < 25; i++) { // More orbs
+                const orbGeometry = new THREE.SphereGeometry(Math.random() * 5 + 3, 16, 16);
                 const orbMaterial = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.75 });
                 const orb = new THREE.Mesh(orbGeometry, orbMaterial);
-                orb.position.set(Math.random() * 400 - 200, Math.random() * 40 + 80, Math.random() * 400 - 200);
-                orb.userData = { speed: Math.random() * 0.015 + 0.01, hover: Math.random() * 2 };
+                orb.position.set(Math.random() * 800 - 400, Math.random() * 60 + 100, Math.random() * 800 - 400);
+                orb.userData = { speed: Math.random() * 0.02 + 0.01, hover: Math.random() * 3 };
                 scene.add(orb);
             }
 
             // Crystal spires
             function createSpire(x, z) {
-                const baseGeometry = new THREE.CylinderGeometry(0.3, 0.5, 3, 8);
+                const baseGeometry = new THREE.CylinderGeometry(0.4, 0.6, 4, 8);
                 const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x3a5a7a, roughness: 0.65 });
                 const base = new THREE.Mesh(baseGeometry, baseMaterial);
-                base.position.set(x, 1.5, z);
+                base.position.set(x, 2, z);
                 base.castShadow = true;
 
-                const spireGeometry = new THREE.TetrahedronGeometry(1.8);
+                const spireGeometry = new THREE.TetrahedronGeometry(2);
                 const spireMaterial = new THREE.MeshPhongMaterial({
                     color: 0x00aaff,
                     emissive: 0x0077cc,
@@ -344,17 +346,44 @@
                     opacity: 0.9
                 });
                 const spire = new THREE.Mesh(spireGeometry, spireMaterial);
-                spire.position.set(x, 4.5, z);
+                spire.position.set(x, 5, z);
                 spire.castShadow = true;
                 spire.rotation.y = Math.random() * Math.PI;
 
                 scene.add(base, spire);
             }
 
-            for (let i = 0; i < 60; i++) {
+            for (let i = 0; i < 100; i++) { // More spires
                 const angle = Math.random() * Math.PI * 2;
-                const radius = Math.random() * 200 + 50;
+                const radius = Math.random() * 400 + 100;
                 createSpire(Math.cos(angle) * radius, Math.sin(angle) * radius);
+            }
+
+            // Glowing pools
+            for (let i = 0; i < 10; i++) {
+                const poolGeometry = new THREE.CircleGeometry(10 + Math.random() * 5, 32);
+                const poolMaterial = new THREE.MeshBasicMaterial({ color: 0x00ccff, emissive: 0x00ccff, transparent: true, opacity: 0.6 });
+                const pool = new THREE.Mesh(poolGeometry, poolMaterial);
+                pool.rotation.x = -Math.PI / 2;
+                pool.position.set(Math.random() * 800 - 400, fractalNoise(pool.position.x, pool.position.z) + 0.1, Math.random() * 800 - 400);
+                scene.add(pool);
+            }
+
+            // Floating islands
+            for (let i = 0; i < 5; i++) {
+                const islandGeometry = new THREE.PlaneGeometry(20 + Math.random() * 10, 20 + Math.random() * 10, 16, 16);
+                islandGeometry.rotateX(-Math.PI / 2);
+                const vertices = islandGeometry.attributes.position.array;
+                for (let j = 0; j < vertices.length; j += 3) {
+                    vertices[j + 1] += Math.random() * 5 - 2.5;
+                }
+                islandGeometry.computeVertexNormals();
+                const islandMaterial = new THREE.MeshStandardMaterial({ color: 0x4a5a7a, roughness: 0.9 });
+                const island = new THREE.Mesh(islandGeometry, islandMaterial);
+                island.position.set(Math.random() * 800 - 400, 50 + Math.random() * 50, Math.random() * 800 - 400);
+                island.castShadow = true;
+                island.receiveShadow = true;
+                scene.add(island);
             }
         }
 
@@ -378,8 +407,8 @@
                     case 's': keys.s = true; break;
                     case 'a': keys.a = true; break;
                     case 'd': keys.d = true; break;
-                    case '+': case '=': cameraDistance = Math.max(5, cameraDistance - 1); break; // Zoom in
-                    case '-': cameraDistance = Math.min(30, cameraDistance + 1); break; // Zoom out
+                    case '+': case '=': cameraDistance = Math.max(5, cameraDistance - 1); break;
+                    case '-': cameraDistance = Math.min(30, cameraDistance + 1); break;
                     case ' ': 
                         keys.space = true; 
                         spaceHoldTime = performance.now(); 
@@ -394,9 +423,9 @@
                     case 'd': keys.d = false; break;
                     case ' ': 
                         keys.space = false; 
-                        const holdDuration = (performance.now() - spaceHoldTime) / 1000; // Seconds
+                        const holdDuration = (performance.now() - spaceHoldTime) / 1000;
                         if (holdDuration >= 3) {
-                            velocity.y += blastSpeed; // Blast off
+                            velocity.y += blastSpeed;
                         }
                         break;
                 }
@@ -494,9 +523,10 @@
             time += 0.015;
 
             // Cosmic lights
-            cosmicLights[0].position.set(Math.cos(time) * 300, Math.sin(time * 0.8) * 200, Math.sin(time) * 300);
-            cosmicLights[1].position.set(Math.cos(time + 2) * 250, Math.sin(time * 0.9) * 180, Math.sin(time + 2) * 250);
-            cosmicLights[2].position.set(Math.cos(time + 4) * 280, Math.sin(time) * 220, Math.sin(time + 4) * 280);
+            cosmicLights[0].position.set(Math.cos(time) * 400, Math.sin(time * 0.8) * 250, Math.sin(time) * 400);
+            cosmicLights[1].position.set(Math.cos(time + 2) * 350, Math.sin(time * 0.9) * 200, Math.sin(time + 2) * 350);
+            cosmicLights[2].position.set(Math.cos(time + 4) * 380, Math.sin(time) * 230, Math.sin(time + 4) * 380);
+            cosmicLights[3].position.set(Math.sin(time + 1) * 360, Math.cos(time * 0.7) * 220, Math.cos(time + 1) * 360);
 
             // Sky pulsation
             skyMaterial.uniforms.time.value = time;
@@ -506,9 +536,9 @@
             scene.children.forEach(child => {
                 if (child.userData.speed) {
                     child.position.x += child.userData.speed;
-                    child.position.y = 80 + Math.sin(time + child.userData.hover) * 8;
-                    if (child.position.x > 200) child.position.x = -200;
-                    child.scale.setScalar(1 + Math.sin(time * 2 + child.userData.hover) * 0.1);
+                    child.position.y = 100 + Math.sin(time + child.userData.hover) * 10;
+                    if (child.position.x > 400) child.position.x = -400;
+                    child.scale.setScalar(1 + Math.sin(time * 2 + child.userData.hover) * 0.15);
                 }
             });
         }
@@ -517,37 +547,53 @@
             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
             const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
 
-            // Apply thrust
+            // Apply thrust with smoother acceleration
             if (keys.w) velocity.add(forward.multiplyScalar(accel));
             if (keys.s) velocity.add(forward.multiplyScalar(-accel));
             if (keys.a) velocity.add(right.multiplyScalar(-accel));
             if (keys.d) velocity.add(right.multiplyScalar(accel));
-            if (keys.space) velocity.y += liftSpeed; // Gentle lift on tap
+            if (keys.space) velocity.y += liftSpeed;
 
-            // Cap speed and apply friction
-            velocity.clampLength(0, maxSpeed * 2); // Higher cap for blast off
+            // Cap speed and apply softer friction
+            velocity.clampLength(0, maxSpeed * 2);
             velocity.multiplyScalar(friction);
 
             // Update ship position
             ship.position.add(velocity);
 
+            // Enhanced motion: hover and tilt
+            ship.position.y += Math.sin(time * 2) * 0.1; // Subtle hover
+            ship.rotation.x = THREE.MathUtils.lerp(ship.rotation.x, velocity.z * 0.1, 0.1); // Tilt forward/back
+            ship.rotation.z = THREE.MathUtils.lerp(ship.rotation.z, -velocity.x * 0.1, 0.1); // Tilt left/right
+            ship.rotation.y += 0.05; // Spin
+
             // Update camera with zoom
             const offset = new THREE.Vector3(0, cameraHeight, cameraDistance).applyQuaternion(camera.quaternion);
-            camera.position.lerp(ship.position.clone().add(offset), 0.15); // Smooth follow
+            camera.position.lerp(ship.position.clone().add(offset), 0.15);
 
-            // Ship wobble and spin
-            ship.rotation.y += 0.05;
-            ship.rotation.x = Math.sin(time * 2) * 0.1;
-            ship.rotation.z = Math.cos(time * 2) * 0.1;
-
-            // Keep above terrain
+            // Keep above terrain and tint ground
             const ground = scene.children.find(child => child.isMesh && child.geometry.type === 'PlaneGeometry');
             if (ground) {
-                const raycaster = new THREE.Raycaster(ship.position, new THREE.Vector3(0, -1, 0), 0, 10);
+                const raycaster = new THREE.Raycaster(ship.position, new THREE.Vector3(0, -1, 0), 0, 20);
                 const intersects = raycaster.intersectObject(ground);
-                if (intersects.length > 0 && ship.position.y < intersects[0].point.y + 3) {
-                    ship.position.y = intersects[0].point.y + 3;
-                    velocity.y = Math.max(0, velocity.y);
+                if (intersects.length > 0) {
+                    if (ship.position.y < intersects[0].point.y + 3) {
+                        ship.position.y = intersects[0].point.y + 3;
+                        velocity.y = Math.max(0, velocity.y);
+                    }
+                    // Dynamic tint near ship
+                    const colors = ground.geometry.attributes.color || new THREE.Float32BufferAttribute(new Float32Array(ground.geometry.attributes.position.count * 3), 3);
+                    const shipX = Math.floor((ship.position.x + 1000) / 2000 * 256);
+                    const shipZ = Math.floor((ship.position.z + 1000) / 2000 * 256);
+                    for (let i = 0; i < colors.count; i++) {
+                        const dx = Math.abs(i % 256 - shipX);
+                        const dz = Math.abs(Math.floor(i / 256) - shipZ);
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        const tint = Math.max(0, 1 - dist / 20);
+                        colors.setXYZ(i, 0.2 + tint * 0.1, 0.3 + tint * 0.2, 0.6 + tint * 0.2);
+                    }
+                    ground.geometry.setAttribute('color', colors);
+                    ground.geometry.attributes.color.needsUpdate = true;
                 }
             }
         }
