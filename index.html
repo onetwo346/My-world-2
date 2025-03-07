@@ -87,7 +87,7 @@
             border-radius: 5px;
             color: #fff;
             z-index: 10;
-            max-width: 300px;
+            max-width: 350px;
             text-shadow: 0 0 3px #00d4ff;
         }
         @media (max-width: 768px) {
@@ -104,7 +104,7 @@
         </div>
     </div>
     <div id="instructions">
-        W/S: Thrust forward/back | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys: Rotate view | Explore in your saucer!
+        W/S: Thrust forward/back | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys: Rotate view | +/-: Zoom in/out
     </div>
     <canvas id="canvas"></canvas>
     <div id="joystick-container">
@@ -115,7 +115,7 @@
     <script>
         // Core variables
         let camera, scene, renderer, ship;
-        let skyMaterial, cosmicLights = [];
+        let skyMaterial, cosmicLights = [], trailParticles;
         let velocity = new THREE.Vector3();
         const maxSpeed = 0.3, accel = 0.05, friction = 0.95;
         let keys = { w: false, s: false, a: false, d: false };
@@ -126,6 +126,7 @@
         let joystick, joystickRect, joystickCenterX, joystickCenterY, joystickActive = false, joystickTouchId = null;
         let loadingElement, progressBar;
         let time = 0;
+        let cameraDistance = 15, cameraHeight = 5; // Default camera offset
 
         // Improved noise for smoother terrain
         function fractalNoise(x, z, octaves = 3) {
@@ -149,7 +150,7 @@
             // Scene setup
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1500);
-            camera.position.set(0, 10, 0); // Higher starting point for flying
+            camera.position.set(0, 10, 15); // Initial position
 
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -308,7 +309,20 @@
             ring.position.y = -0.1;
             shipGroup.add(ring);
 
-            shipGroup.position.copy(camera.position);
+            // Trail particles
+            const trailGeometry = new THREE.BufferGeometry();
+            const trailVertices = new Float32Array(300); // 100 particles * 3 coords
+            for (let i = 0; i < trailVertices.length; i += 3) {
+                trailVertices[i] = 0;
+                trailVertices[i + 1] = 0;
+                trailVertices[i + 2] = 0;
+            }
+            trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailVertices, 3));
+            const trailMaterial = new THREE.PointsMaterial({ color: 0xff00ff, size: 0.5, transparent: true, blending: THREE.AdditiveBlending });
+            trailParticles = new THREE.Points(trailGeometry, trailMaterial);
+            shipGroup.add(trailParticles);
+
+            shipGroup.position.set(0, 10, 0);
             scene.add(shipGroup);
             ship = shipGroup;
 
@@ -377,6 +391,8 @@
                     case 's': keys.s = true; break;
                     case 'a': keys.a = true; break;
                     case 'd': keys.d = true; break;
+                    case '+': case '=': cameraDistance = Math.max(5, cameraDistance - 1); break; // Zoom in
+                    case '-': cameraDistance = Math.min(30, cameraDistance + 1); break; // Zoom out
                 }
             });
             document.addEventListener('keyup', (e) => {
@@ -513,14 +529,29 @@
             velocity.clampLength(0, maxSpeed);
             velocity.multiplyScalar(friction);
 
-            // Update ship and camera position
+            // Update ship position
             ship.position.add(velocity);
-            camera.position.lerp(ship.position.clone().add(new THREE.Vector3(0, 2, 5)), 0.1); // Camera lags slightly behind
+
+            // Update camera with zoom
+            const offset = new THREE.Vector3(0, cameraHeight, cameraDistance).applyQuaternion(camera.quaternion);
+            camera.position.lerp(ship.position.clone().add(offset), 0.15); // Smooth follow
 
             // Ship wobble and spin
-            ship.rotation.y += 0.05; // Spin
-            ship.rotation.x = Math.sin(time * 2) * 0.1; // Wobble
+            ship.rotation.y += 0.05;
+            ship.rotation.x = Math.sin(time * 2) * 0.1;
             ship.rotation.z = Math.cos(time * 2) * 0.1;
+
+            // Trail effect
+            const positions = trailParticles.geometry.attributes.position.array;
+            for (let i = positions.length - 3; i >= 3; i -= 3) {
+                positions[i] = positions[i - 3];
+                positions[i + 1] = positions[i - 2];
+                positions[i + 2] = positions[i - 1];
+            }
+            positions[0] = ship.position.x;
+            positions[1] = ship.position.y - 0.5;
+            positions[2] = ship.position.z;
+            trailParticles.geometry.attributes.position.needsUpdate = true;
 
             // Keep above terrain
             const ground = scene.children.find(child => child.isMesh && child.geometry.type === 'PlaneGeometry');
