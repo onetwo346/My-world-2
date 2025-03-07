@@ -1,0 +1,513 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cosmic Horizon: 3D Simulation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body, html {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+            background: #0a0a1e;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        #joystick-container {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.3), rgba(0, 0, 50, 0.5));
+            border-radius: 50%;
+            z-index: 10;
+            touch-action: none;
+        }
+        #joystick {
+            position: relative;
+            top: 25px;
+            left: 25px;
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #00d4ff, #1e90ff);
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00d4ff;
+            cursor: pointer;
+            touch-action: none;
+        }
+        #loading {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #0a0a1e, #1e1e3c);
+            color: #fff;
+            z-index: 100;
+            font-size: 24px;
+            text-shadow: 0 0 5px #00d4ff;
+        }
+        #loading-progress {
+            width: 80%;
+            max-width: 300px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            margin-top: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00d4ff, #ff00ff);
+            transition: width 0.3s;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 50, 0.7);
+            padding: 10px 15px;
+            border-radius: 5px;
+            color: #fff;
+            z-index: 10;
+            max-width: 300px;
+            text-shadow: 0 0 3px #00d4ff;
+        }
+        @media (max-width: 768px) {
+            #joystick-container { bottom: 20px; right: 20px; }
+            #instructions { font-size: 14px; max-width: 250px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div>Loading Cosmic Horizon...</div>
+        <div id="loading-progress">
+            <div id="progress-bar"></div>
+        </div>
+    </div>
+    <div id="instructions">
+        W/S: Move forward/back | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys also rotate view
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="joystick-container">
+        <div id="joystick"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Core variables
+        let camera, scene, renderer;
+        let skyMaterial, cosmicLights = [];
+        let velocity = new THREE.Vector3();
+        const moveSpeed = 0.15, friction = 0.92;
+        let keys = { w: false, s: false, a: false, d: false };
+        let isUserInteracting = false, onPointerDownMouseX = 0, onPointerDownMouseY = 0;
+        let lon = 0, onPointerDownLon = 0, lat = 0, onPointerDownLat = 0;
+        let phi = 0, theta = 0;
+        let joystick, joystickRect, joystickCenterX, joystickCenterY, joystickActive = false, joystickTouchId = null;
+        let loadingElement, progressBar;
+        let time = 0;
+
+        // Improved noise for smoother terrain
+        function fractalNoise(x, z, octaves = 3) {
+            let total = 0, frequency = 0.05, amplitude = 1, maxValue = 0;
+            for (let i = 0; i < octaves; i++) {
+                total += Math.sin(x * frequency) * Math.cos(z * frequency) * amplitude;
+                maxValue += amplitude;
+                amplitude *= 0.5;
+                frequency *= 2;
+            }
+            return total / maxValue * 5; // Lower height for flatter terrain
+        }
+
+        init();
+        animate();
+
+        function init() {
+            loadingElement = document.getElementById('loading');
+            progressBar = document.getElementById('progress-bar');
+
+            // Scene setup
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1500);
+            camera.position.set(0, 3, 0); // Slightly higher for better view
+
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Create environment
+            createCosmicSky();
+            createTerrain();
+            setupJoystick();
+            setupControls();
+
+            // Event listeners
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('pointerdown', onPointerDown);
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+
+            setTimeout(() => loadingElement.style.display = 'none', 2000);
+        }
+
+        function createCosmicSky() {
+            updateProgress(10);
+
+            // Cosmic sky with dynamic shader
+            const skyGeometry = new THREE.SphereGeometry(1000, 60, 40);
+            skyGeometry.scale(-1, 1, 1);
+
+            const uniforms = {
+                time: { value: 0 },
+                baseColor: { value: new THREE.Vector3(0.05, 0.1, 0.3) },
+                pulseIntensity: { value: 0.5 }
+            };
+
+            const vertexShader = `
+                varying vec3 vWorldPosition;
+                void main() {
+                    vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `;
+            const fragmentShader = `
+                uniform float time;
+                uniform vec3 baseColor;
+                uniform float pulseIntensity;
+                varying vec3 vWorldPosition;
+                void main() {
+                    vec3 dir = normalize(vWorldPosition);
+                    float noise = sin(dir.x * 3.0 + time) * cos(dir.y * 3.0 + time);
+                    vec3 color = mix(baseColor, vec3(0.8, 0.4, 0.6), noise * 0.5 + 0.5);
+                    float pulse = sin(time * 0.5 + dir.z * 5.0) * pulseIntensity;
+                    vec3 finalColor = mix(color, vec3(1.0, 0.8, 0.4), pulse);
+                    gl_FragColor = vec4(finalColor, 1.0);
+                }
+            `;
+
+            skyMaterial = new THREE.ShaderMaterial({
+                uniforms: uniforms,
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
+                side: THREE.BackSide
+            });
+            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+            scene.add(sky);
+
+            // Cosmic lights (replacing sun/moon)
+            for (let i = 0; i < 3; i++) {
+                const lightGeometry = new THREE.SphereGeometry(8 - i * 2, 32, 32);
+                const lightMaterial = new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffaa88 : i === 1 ? 0x88ccff : 0xddaaff });
+                const light = new THREE.Mesh(lightGeometry, lightMaterial);
+                scene.add(light);
+                cosmicLights.push(light);
+
+                const pointLight = new THREE.PointLight(lightMaterial.color, 1.2, 800);
+                pointLight.castShadow = true;
+                light.add(pointLight);
+            }
+
+            // Nebula particles
+            const particleGeometry = new THREE.BufferGeometry();
+            const particleVertices = [];
+            for (let i = 0; i < 1500; i++) {
+                const x = (Math.random() - 0.5) * 1200;
+                const y = Math.random() * 600 + 50;
+                const z = (Math.random() - 0.5) * 1200;
+                particleVertices.push(x, y, z);
+            }
+            particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particleVertices, 3));
+            const particleMaterial = new THREE.PointsMaterial({ color: 0xaaaaff, size: 1.5, transparent: true, blending: THREE.AdditiveBlending });
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            scene.add(particles);
+
+            scene.add(new THREE.AmbientLight(0x303050, 0.3));
+            updateProgress(40);
+        }
+
+        function createTerrain() {
+            updateProgress(50);
+
+            // Smooth, leveled terrain with cosmic tint
+            const groundGeometry = new THREE.PlaneGeometry(1000, 1000, 100, 100);
+            groundGeometry.rotateX(-Math.PI / 2);
+            const vertices = groundGeometry.attributes.position.array;
+            for (let i = 0; i < vertices.length; i += 3) {
+                const x = vertices[i], z = vertices[i + 2];
+                const distance = Math.sqrt(x * x + z * z);
+                vertices[i + 1] = fractalNoise(x, z) * (1 - Math.min(1, distance / 200)); // Flatter near center
+            }
+            groundGeometry.computeVertexNormals();
+
+            const groundMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2a3a5a,
+                roughness: 0.85,
+                metalness: 0.2,
+                emissive: 0x102030,
+                emissiveIntensity: 0.3
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Enhanced environment details
+            addEnvironmentDetails();
+
+            updateProgress(80);
+        }
+
+        function addEnvironmentDetails() {
+            // Glowing orbs (replacing clouds)
+            for (let i = 0; i < 12; i++) {
+                const orbGeometry = new THREE.SphereGeometry(Math.random() * 5 + 3, 16, 16);
+                const orbMaterial = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.7 });
+                const orb = new THREE.Mesh(orbGeometry, orbMaterial);
+                orb.position.set(Math.random() * 400 - 200, Math.random() * 40 + 80, Math.random() * 400 - 200);
+                orb.userData = { speed: Math.random() * 0.02 + 0.01, hover: Math.random() * 2 };
+                scene.add(orb);
+            }
+
+            // Crystal spires (replacing trees)
+            function createSpire(x, z) {
+                const baseGeometry = new THREE.CylinderGeometry(0.3, 0.5, 3, 6);
+                const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x3a5a7a, roughness: 0.7 });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.set(x, 1.5, z);
+                base.castShadow = true;
+
+                const spireGeometry = new THREE.TetrahedronGeometry(1.5);
+                const spireMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x00aaff,
+                    emissive: 0x0077cc,
+                    shininess: 90,
+                    transparent: true,
+                    opacity: 0.85
+                });
+                const spire = new THREE.Mesh(spireGeometry, spireMaterial);
+                spire.position.set(x, 4, z);
+                spire.castShadow = true;
+
+                scene.add(base, spire);
+            }
+
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * 150 + 50;
+                createSpire(Math.cos(angle) * radius, Math.sin(angle) * radius);
+            }
+        }
+
+        function setupJoystick() {
+            joystick = document.getElementById('joystick');
+            const joystickContainer = document.getElementById('joystick-container');
+            joystickRect = joystickContainer.getBoundingClientRect();
+            joystickCenterX = joystickRect.left + joystickRect.width / 2;
+            joystickCenterY = joystickRect.top + joystickRect.height / 2;
+
+            joystickContainer.addEventListener('pointerdown', onJoystickStart, { passive: false });
+            document.addEventListener('pointermove', onJoystickMove, { passive: false });
+            document.addEventListener('pointerup', onJoystickEnd);
+            document.addEventListener('pointercancel', onJoystickEnd);
+
+            updateProgress(90);
+        }
+
+        function setupControls() {
+            document.addEventListener('keydown', (e) => {
+                switch (e.key.toLowerCase()) {
+                    case 'w': keys.w = true; break;
+                    case 's': keys.s = true; break;
+                    case 'a': keys.a = true; break;
+                    case 'd': keys.d = true; break;
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                switch (e.key.toLowerCase()) {
+                    case 'w': keys.w = false; break;
+                    case 's': keys.s = false; break;
+                    case 'a': keys.a = false; break;
+                    case 'd': keys.d = false; break;
+                }
+            });
+            document.addEventListener('keydown', onKeyDown); // Keep arrow keys for rotation
+        }
+
+        function onJoystickStart(event) {
+            event.preventDefault();
+            if (!joystickActive) {
+                joystickActive = true;
+                joystickTouchId = event.pointerId;
+                joystick.style.transition = 'none';
+                updateJoystickPosition(event.clientX, event.clientY);
+            }
+        }
+
+        function onJoystickMove(event) {
+            if (joystickActive && event.pointerId === joystickTouchId) {
+                event.preventDefault();
+                updateJoystickPosition(event.clientX, event.clientY);
+            }
+        }
+
+        function onJoystickEnd(event) {
+            if (joystickActive && event.pointerId === joystickTouchId) {
+                joystickActive = false;
+                joystick.style.transition = '0.2s';
+                joystick.style.left = '25px';
+                joystick.style.top = '25px';
+            }
+        }
+
+        function updateJoystickPosition(clientX, clientY) {
+            joystickRect = document.getElementById('joystick-container').getBoundingClientRect();
+            joystickCenterX = joystickRect.left + joystickRect.width / 2;
+            joystickCenterY = joystickRect.top + joystickRect.height / 2;
+
+            let deltaX = clientX - joystickCenterX;
+            let deltaY = clientY - joystickCenterY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxRadius = joystickRect.width / 2 - joystick.offsetWidth / 2;
+            if (distance > maxRadius) {
+                deltaX = deltaX * maxRadius / distance;
+                deltaY = deltaY * maxRadius / distance;
+            }
+
+            joystick.style.left = (deltaX + joystickRect.width / 2 - joystick.offsetWidth / 2) + 'px';
+            joystick.style.top = (deltaY + joystickRect.height / 2 - joystick.offsetHeight / 2) + 'px';
+
+            lon += deltaX * 0.15;
+            lat -= deltaY * 0.15;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            joystickRect = document.getElementById('joystick-container').getBoundingClientRect();
+            joystickCenterX = joystickRect.left + joystickRect.width / 2;
+            joystickCenterY = joystickRect.top + joystickRect.height / 2;
+        }
+
+        function onPointerDown(event) {
+            if (event.target.id !== 'joystick' && event.target.id !== 'joystick-container') {
+                isUserInteracting = true;
+                onPointerDownMouseX = event.clientX;
+                onPointerDownMouseY = event.clientY;
+                onPointerDownLon = lon;
+                onPointerDownLat = lat;
+            }
+        }
+
+        function onPointerMove(event) {
+            if (isUserInteracting) {
+                lon = (onPointerDownMouseX - event.clientX) * 0.15 + onPointerDownLon;
+                lat = (event.clientY - onPointerDownMouseY) * 0.15 + onPointerDownLat;
+            }
+        }
+
+        function onPointerUp() {
+            isUserInteracting = false;
+        }
+
+        function onKeyDown(event) {
+            switch (event.keyCode) {
+                case 37: lon -= 3; break; // Left
+                case 38: lat += 3; break; // Up
+                case 39: lon += 3; break; // Right
+                case 40: lat -= 3; break; // Down
+            }
+        }
+
+        function updateCosmicEnvironment() {
+            time += 0.015;
+
+            // Cosmic lights dance
+            cosmicLights[0].position.set(Math.cos(time) * 300, Math.sin(time * 0.8) * 200, Math.sin(time) * 300);
+            cosmicLights[1].position.set(Math.cos(time + 2) * 250, Math.sin(time * 0.9) * 180, Math.sin(time + 2) * 250);
+            cosmicLights[2].position.set(Math.cos(time + 4) * 280, Math.sin(time) * 220, Math.sin(time + 4) * 280);
+
+            // Sky pulsation
+            skyMaterial.uniforms.time.value = time;
+            skyMaterial.uniforms.pulseIntensity.value = 0.4 + Math.sin(time * 0.3) * 0.2;
+
+            // Orb movement
+            scene.children.forEach(child => {
+                if (child.userData.speed) {
+                    child.position.x += child.userData.speed;
+                    child.position.y = 80 + Math.sin(time + child.userData.hover) * 10;
+                    if (child.position.x > 200) child.position.x = -200;
+                }
+            });
+        }
+
+        function updateMovement() {
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+
+            if (keys.w) velocity.add(forward.multiplyScalar(moveSpeed));
+            if (keys.s) velocity.add(forward.multiplyScalar(-moveSpeed));
+            if (keys.a) velocity.add(right.multiplyScalar(-moveSpeed));
+            if (keys.d) velocity.add(right.multiplyScalar(moveSpeed));
+
+            velocity.multiplyScalar(friction);
+            camera.position.add(velocity);
+
+            // Terrain collision
+            const ground = scene.children.find(child => child.isMesh && child.geometry.type === 'PlaneGeometry');
+            if (ground) {
+                const raycaster = new THREE.Raycaster(camera.position, new THREE.Vector3(0, -1, 0), 0, 10);
+                const intersects = raycaster.intersectObject(ground);
+                if (intersects.length > 0) {
+                    camera.position.y = Math.max(camera.position.y, intersects[0].point.y + 3);
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateCosmicEnvironment();
+            updateMovement();
+
+            lat = Math.max(-85, Math.min(85, lat));
+            phi = THREE.MathUtils.degToRad(90 - lat);
+            theta = THREE.MathUtils.degToRad(lon);
+
+            camera.lookAt(
+                camera.position.x + Math.sin(phi) * Math.cos(theta),
+                camera.position.y + Math.cos(phi),
+                camera.position.z + Math.sin(phi) * Math.sin(theta)
+            );
+
+            renderer.render(scene, camera);
+        }
+
+        function updateProgress(percent) {
+            progressBar.style.width = percent + '%';
+        }
+
+        window.addEventListener('load', () => updateProgress(100));
+    </script>
+</body>
+</html>
