@@ -1,1 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cosmic Horizon: Saucer Explorer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body, html {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            font-family: 'Comic Sans MS', 'Arial', sans-serif;
+            background: #0a0a1e;
+            color: #fff;
+            touch-action: none;
+        }
 
+        #intro {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, #1e1e3c 0%, #0a0a1e 70%);
+            z-index: 200;
+            animation: pulseBackground 10s infinite alternate;
+        }
+
+        @keyframes pulseBackground {
+            0% { background: radial-gradient(circle at center, #1e1e3c 0%, #0a0a1e 70%); }
+            100% { background: radial-gradient(circle at center, #2a2a5a 0%, #0a0a1e 70%); }
+        }
+
+        #intro h1 {
+            font-size: 5rem;
+            text-transform: uppercase;
+            color: #00d4ff;
+            text-shadow: 0 0 10px #00d4ff, 0 0 20px #ff00ff, 0 0 30px #00d4ff;
+            animation: glowText 2s infinite alternate;
+            border: 4px solid #fff;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            transform: skew(-5deg);
+        }
+
+        @keyframes glowText {
+            0% { text-shadow: 0 0 10px #00d4ff, 0 0 20px #ff00ff; }
+            100% { text-shadow: 0 0 20px #00d4ff, 0 0 40px #ff00ff; }
+        }
+
+        #start-button {
+            margin-top: 40px;
+            padding: 20px 40px;
+            font-size: 2.5rem;
+            color: #fff;
+            background: linear-gradient(45deg, #ff00ff, #00d4ff);
+            border: 5px solid #fff;
+            border-radius: 15px;
+            text-transform: uppercase;
+            cursor: pointer;
+            box-shadow: 0 0 15px #ff00ff, 0 0 25px #00d4ff;
+            animation: pulseButton 1.5s infinite;
+            transform: skew(-10deg);
+        }
+
+        #start-button:hover {
+            background: linear-gradient(45deg, #00d4ff, #ff00ff);
+            box-shadow: 0 0 25px #ff00ff, 0 0 35px #00d4ff;
+        }
+
+        @keyframes pulseButton {
+            0% { transform: skew(-10deg) scale(1); box-shadow: 0 0 15px #ff00ff; }
+            50% { transform: skew(-10deg) scale(1.05); box-shadow: 0 0 25px #00d4ff; }
+            100% { transform: skew(-10deg) scale(1); box-shadow: 0 0 15px #ff00ff; }
+        }
+
+        #footer {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            font-size: 1.2rem;
+            color: #aaaaff;
+            text-shadow: 0 0 5px #aaaaff;
+            letter-spacing: 2px;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            display: none;
+        }
+
+        #joystick-container {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.3), rgba(0, 0, 50, 0.5));
+            border-radius: 50%;
+            z-index: 10;
+            touch-action: none;
+        }
+
+        #joystick {
+            position: relative;
+            top: 25px;
+            left: 25px;
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #00d4ff, #1e90ff);
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00d4ff;
+            cursor: pointer;
+            touch-action: none;
+        }
+
+        #loading {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #0a0a1e, #1e1e3c);
+            color: #fff;
+            z-index: 100;
+            font-size: 24px;
+            text-shadow: 0 0 5px #00d4ff;
+        }
+
+        #loading-progress {
+            width: 80%;
+            max-width: 300px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            margin-top: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00d4ff, #ff00ff);
+            transition: width 0.3s;
+        }
+
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 50, 0.7);
+            padding: 10px 15px;
+            border-radius: 5px;
+            color: #fff;
+            z-index: 10;
+            max-width: 350px;
+            text-shadow: 0 0 3px #00d4ff;
+        }
+
+        @media (max-width: 768px) {
+            #intro h1 { font-size: 3rem; }
+            #start-button { font-size: 1.5rem; padding: 15px 30px; }
+            #footer { font-size: 1rem; }
+            #joystick-container { bottom: 20px; right: 20px; }
+            #instructions { font-size: 14px; max-width: 250px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="intro">
+        <h1>Cosmic Horizon</h1>
+        <div id="start-button">Tap to Start</div>
+        <div id="footer">Designed by Nana Kofi cosmoscoderr@gmail.com</div>
+    </div>
+
+    <div id="loading">
+        <div>Loading Cosmic Horizon...</div>
+        <div id="loading-progress">
+            <div id="progress-bar"></div>
+        </div>
+    </div>
+    <div id="instructions">
+        W/S: Thrust forward/back (Double-tap W to boost) | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys: Rotate view | +/-: Zoom in/out | Space: Tap to lift, hold 3s+ to blast off
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="joystick-container">
+        <div id="joystick"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const intro = document.getElementById('intro');
+        const canvas = document.getElementById('canvas');
+        const startButton = document.getElementById('start-button');
+
+        startButton.addEventListener('click', () => {
+            intro.style.display = 'none';
+            canvas.style.display = 'block';
+            init();
+        });
+
+        let camera, scene, renderer, ship;
+        let skyMaterial, cosmicLights = [];
+        let velocity = new THREE.Vector3();
+        let baseAccel = 0.06, baseMaxSpeed = 0.35, friction = 0.97, liftSpeed = 0.2, blastSpeed = 10;
+        let accel = baseAccel, maxSpeed = baseMaxSpeed;
+        let keys = { w: false, s: false, a: false, d: false, space: false };
+        let isUserInteracting = false, onPointerDownMouseX = 0, onPointerDownMouseY = 0;
+        let lon = 0, onPointerDownLon = 0, lat = 0, onPointerDownLat = 0;
+        let targetLon = 0, targetLat = 0;
+        let phi = 0, theta = 0;
+        let joystick, joystickRect, joystickCenterX, joystickCenterY, joystickActive = false, joystickTouchId = null;
+        let loadingElement, progressBar;
+        let time = 0, spaceHoldTime = 0, lastWPress = 0, boostTimer = 0;
+        let cameraDistance = 15, cameraHeight = 5;
+        let terrainChunks = {};
+        const chunkSize = 2000;
+
+        function fractalNoise(x, z, octaves = 4) {
+            let total = 0, frequency = 0.03, amplitude = 1, maxValue = 0;
+            for (let i = 0; i < octaves; i++) {
+                total += Math.sin(x * frequency) * Math.cos(z * frequency) * amplitude;
+                total += Math.random() * 0.5 * amplitude;
+                maxValue += amplitude;
+                amplitude *= 0.5;
+                frequency *= 2;
+            }
+            return total / maxValue * 15;
+        }
+
+        function init() {
+            loadingElement = document.getElementById('loading');
+            progressBar = document.getElementById('progress-bar');
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.set(0, 10, 15);
+
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            createCosmicSky();
+            createInitialTerrain();
+            createShip();
+            setupJoystick();
+            setupControls();
+
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('pointerdown', onPointerDown);
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
+
+            setTimeout(() => loadingElement.style.display = 'none', 2000);
+            animate();
+        }
+
+        function createCosmicSky() {
+            updateProgress(10);
+
+            const skyGeometry = new THREE.SphereGeometry(1500, 60, 40);
+            skyGeometry.scale(-1, 1, 1);
+
+            const uniforms = {
+                time: { value: 0 },
+                baseColor: { value: new THREE.Vector3(0.05, 0.1, 0.3) },
+                pulseIntensity: { value: 0.5 }
+            };
+
+            const vertexShader = `
+                varying vec3 vWorldPosition;
+                void main() {
+                    vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `;
+            const fragmentShader = `
+                uniform float time;
+                uniform vec3 baseColor;
+                uniform float pulseIntensity;
+                varying vec3 vWorldPosition;
+                void main() {
+                    vec3 dir = normalize(vWorldPosition);
+                    float noise = sin(dir.x * 3.0 + time) * cos(dir.y * 3.0 + time) * 0.5;
+                    vec3 color = mix(baseColor, vec3(0.8, 0.4, 0.6), noise + 0.5);
+                    float pulse = sin(time * 0.5 + dir.z * 5.0) * pulseIntensity;
+                    vec3 finalColor = mix(color, vec3(1.0, 0.8, 0.4), pulse);
+                    gl_FragColor = vec4(finalColor * (1.0 + pulse * 0.3), 1.0);
+                }
+            `;
+
+            skyMaterial = new THREE.ShaderMaterial({
+                uniforms: uniforms,
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
+                side: THREE.BackSide
+            });
+            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+            scene.add(sky);
+
+            for (let i = 0; i < 4; i++) {
+                const lightGeometry = new THREE.SphereGeometry(10 - i * 2, 32, 32);
+                const lightMaterial = new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffaa88 : i === 1 ? 0x88ccff : i === 2 ? 0xddaaff : 0xffff88 });
+                const light = new THREE.Mesh(lightGeometry, lightMaterial);
+                scene.add(light);
+                cosmicLights.push(light);
+
+                const pointLight = new THREE.PointLight(lightMaterial.color, 1.5, 1000);
+                pointLight.castShadow = true;
+                pointLight.shadow.mapSize.width = 2048;
+                pointLight.shadow.mapSize.height = 2048;
+                light.add(pointLight);
+            }
+
+            const particleGeometry = new THREE.BufferGeometry();
+            const particleVertices = [];
+            for (let i = 0; i < 3000; i++) {
+                const x = (Math.random() - 0.5) * 1800;
+                const y = Math.random() * 800 + 50;
+                const z = (Math.random() - 0.5) * 1800;
+                particleVertices.push(x, y, z);
+            }
+            particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particleVertices, 3));
+            const particleMaterial = new THREE.PointsMaterial({ color: 0xaaaaff, size: 2, transparent: true, blending: THREE.AdditiveBlending });
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            scene.add(particles);
+
+            scene.add(new THREE.AmbientLight(0x303050, 0.5));
+            updateProgress(40);
+        }
+
+        function createTerrainChunk(chunkX, chunkZ) {
+            const key = `${chunkX},${chunkZ}`;
+            if (terrainChunks[key]) return;
+
+            const groundGeometry = new THREE.PlaneGeometry(chunkSize, chunkSize, 128, 128);
+            groundGeometry.rotateX(-Math.PI / 2);
+            const vertices = groundGeometry.attributes.position.array;
+            for (let i = 0; i < vertices.length; i += 3) {
+                const x = vertices[i] + chunkX * chunkSize;
+                const z = vertices[i + 2] + chunkZ * chunkSize;
+                vertices[i + 1] = fractalNoise(x, z);
+            }
+            groundGeometry.computeVertexNormals();
+
+            const groundMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2a3a5a,
+                roughness: 0.8,
+                metalness: 0.25,
+                emissive: 0x102030,
+                emissiveIntensity: 0.5,
+                vertexColors: true
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.position.set(chunkX * chunkSize, 0, chunkZ * chunkSize);
+            ground.receiveShadow = true;
+            scene.add(ground);
+            terrainChunks[key] = ground;
+
+            addEnvironmentDetailsToChunk(chunkX, chunkZ, ground);
+        }
+
+        function createInitialTerrain() {
+            updateProgress(50);
+            for (let x = -1; x <= 1; x++) {
+                for (let z = -1; z <= 1; z++) {
+                    createTerrainChunk(x, z);
+                }
+            }
+            updateProgress(80);
+        }
+
+        function updateTerrainChunks() {
+            const chunkX = Math.floor(ship.position.x / chunkSize);
+            const chunkZ = Math.floor(ship.position.z / chunkSize);
+            const renderDistance = 1;
+
+            for (let x = chunkX - renderDistance; x <= chunkX + renderDistance; x++) {
+                for (let z = chunkZ - renderDistance; z <= chunkZ + renderDistance; z++) {
+                    createTerrainChunk(x, z);
+                }
+            }
+
+            // Clean up far chunks
+            for (let key in terrainChunks) {
+                const [cx, cz] = key.split(',').map(Number);
+                if (Math.abs(cx - chunkX) > renderDistance + 1 || Math.abs(cz - chunkZ) > renderDistance + 1) {
+                    scene.remove(terrainChunks[key]);
+                    delete terrainChunks[key];
+                }
+            }
+        }
+
+        function createShip() {
+            const shipGroup = new THREE.Group();
+
+            const baseGeometry = new THREE.CylinderGeometry(3, 2.5, 0.8, 32, 1, false, 0, Math.PI * 1.8);
+            const baseMaterial = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 50 });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.castShadow = true;
+            shipGroup.add(base);
+
+            const domeGeometry = new THREE.SphereGeometry(1.5, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            const domeMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffaa, transparent: true, opacity: 0.8, shininess: 100 });
+            const dome = new THREE.Mesh(domeGeometry, domeMaterial);
+            dome.position.y = 0.8;
+            dome.castShadow = true;
+            shipGroup.add(dome);
+
+            const ringGeometry = new THREE.TorusGeometry(2, 0.2, 8, 32);
+            const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, emissive: 0xff00ff });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = -0.1;
+            shipGroup.add(ring);
+
+            shipGroup.position.set(0, 10, 0);
+            scene.add(shipGroup);
+            ship = shipGroup;
+
+            updateProgress(90);
+        }
+
+        function addEnvironmentDetailsToChunk(chunkX, chunkZ, ground) {
+            const chunkOffsetX = chunkX * chunkSize;
+            const chunkOffsetZ = chunkZ * chunkSize;
+
+            for (let i = 0; i < 5; i++) {
+                const orbGeometry = new THREE.SphereGeometry(Math.random() * 5 + 3, 16, 16);
+                const orbMaterial = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.75 });
+                const orb = new THREE.Mesh(orbGeometry, orbMaterial);
+                const x = chunkOffsetX + Math.random() * chunkSize - chunkSize / 2;
+                const z = chunkOffsetZ + Math.random() * chunkSize - chunkSize / 2;
+                orb.position.set(x, fractalNoise(x, z) + Math.random() * 60 + 20, z);
+                orb.userData = { speed: Math.random() * 0.02 + 0.01, hover: Math.random() * 3 };
+                scene.add(orb);
+            }
+
+            function createSpire(x, z) {
+                const baseGeometry = new THREE.CylinderGeometry(0.4, 0.6, 4, 8);
+                const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x3a5a7a, roughness: 0.65 });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.set(x, fractalNoise(x, z) + 2, z);
+                base.castShadow = true;
+
+                const spireGeometry = new THREE.TetrahedronGeometry(2);
+                const spireMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x00aaff,
+                    emissive: 0x0077cc,
+                    shininess: 100,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                const spire = new THREE.Mesh(spireGeometry, spireMaterial);
+                spire.position.set(x, fractalNoise(x, z) + 5, z);
+                spire.castShadow = true;
+                spire.rotation.y = Math.random() * Math.PI;
+
+                scene.add(base, spire);
+            }
+
+            for (let i = 0; i < 20; i++) {
+                const x = chunkOffsetX + Math.random() * chunkSize - chunkSize / 2;
+                const z = chunkOffsetZ + Math.random() * chunkSize - chunkSize / 2;
+                createSpire(x, z);
+            }
+
+            for (let i = 0; i < 3; i++) {
+                const poolGeometry = new THREE.CircleGeometry(10 + Math.random() * 5, 32);
+                const poolMaterial = new THREE.MeshBasicMaterial({ color: 0x00ccff, emissive: 0x00ccff, transparent: true, opacity: 0.6 });
+                const pool = new THREE.Mesh(poolGeometry, poolMaterial);
+                const x = chunkOffsetX + Math.random() * chunkSize - chunkSize / 2;
+                const z = chunkOffsetZ + Math.random() * chunkSize - chunkSize / 2;
+                pool.rotation.x = -Math.PI / 2;
+                pool.position.set(x, fractalNoise(x, z) + 0.1, z);
+                scene.add(pool);
+            }
+
+            for (let i = 0; i < 2; i++) {
+                const islandGeometry = new THREE.PlaneGeometry(20 + Math.random() * 10, 20 + Math.random() * 10, 16, 16);
+                islandGeometry.rotateX(-Math.PI / 2);
+                const vertices = islandGeometry.attributes.position.array;
+                for (let j = 0; j < vertices.length; j += 3) {
+                    vertices[j + 1] += Math.random() * 5 - 2.5;
+                }
+                islandGeometry.computeVertexNormals();
+                const islandMaterial = new THREE.MeshStandardMaterial({ color: 0x4a5a7a, roughness: 0.9 });
+                const island = new THREE.Mesh(islandGeometry, islandMaterial);
+                const x = chunkOffsetX + Math.random() * chunkSize - chunkSize / 2;
+                const z = chunkOffsetZ + Math.random() * chunkSize - chunkSize / 2;
+                island.position.set(x, fractalNoise(x, z) + 50 + Math.random() * 50, z);
+                island.castShadow = true;
+                island.receiveShadow = true;
+                scene.add(island);
+            }
+        }
+
+        function setupJoystick() {
+            joystick = document.getElementById('joystick');
+            const joystickContainer = document.getElementById('joystick-container');
+            joystickRect = joystickContainer.getBoundingClientRect();
+            joystickCenterX = joystickRect.left + joystickRect.width / 2;
+            joystickCenterY = joystickRect.top + joystickRect.height / 2;
+
+            joystickContainer.addEventListener('pointerdown', onJoystickStart, { passive: false });
+            document.addEventListener('pointermove', onJoystickMove, { passive: false });
+            document.addEventListener('pointerup', onJoystickEnd);
+            document.addEventListener('pointercancel', onJoystickEnd);
+        }
+
+        function setupControls() {
+            document.addEventListener('keydown', (e) => {
+                switch (e.key.toLowerCase()) {
+                    case 'w': 
+                        keys.w = true; 
+                        const now = performance.now();
+                        if (now - lastWPress < 500) { // Double-tap within 0.5s
+                            accel = baseAccel * 2;
+                            maxSpeed = baseMaxSpeed * 2;
+                            boostTimer = now + 2000; // Boost for 2s
+                        }
+                        lastWPress = now;
+                        break;
+                    case 's': keys.s = true; break;
+                    case 'a': keys.a = true; break;
+                    case 'd': keys.d = true; break;
+                    case '+': case '=': cameraDistance = Math.max(5, cameraDistance - 1); break;
+                    case '-': cameraDistance = Math.min(30, cameraDistance + 1); break;
+                    case ' ': 
+                        keys.space = true; 
+                        spaceHoldTime = performance.now(); 
+                        break;
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                switch (e.key.toLowerCase()) {
+                    case 'w': keys.w = false; break;
+                    case 's': keys.s = false; break;
+                    case 'a': keys.a = false; break;
+                    case 'd': keys.d = false; break;
+                    case ' ': 
+                        keys.space = false; 
+                        const holdDuration = (performance.now() - spaceHoldTime) / 1000;
+                        if (holdDuration >= 3) {
+                            velocity.y += blastSpeed;
+                        }
+                        break;
+                }
+            });
+            document.addEventListener('keydown', onKeyDown);
+        }
+
+        function onJoystickStart(event) {
+            event.preventDefault();
+            if (!joystickActive) {
+                joystickActive = true;
+                joystickTouchId = event.pointerId;
+                joystick.style.transition = 'none';
+                updateJoystickPosition(event.clientX, event.clientY);
+            }
+        }
+
+        function onJoystickMove(event) {
+            if (joystickActive && event.pointerId === joystickTouchId) {
+                event.preventDefault();
+                updateJoystickPosition(event.clientX, event.clientY);
+            }
+        }
+
+        function onJoystickEnd(event) {
+            if (joystickActive && event.pointerId === joystickTouchId) {
+                joystickActive = false;
+                joystick.style.transition = '0.2s';
+                joystick.style.left = '25px';
+                joystick.style.top = '25px';
+            }
+        }
+
+        function updateJoystickPosition(clientX, clientY) {
+            joystickRect = document.getElementById('joystick-container').getBoundingClientRect();
+            joystickCenterX = joystickRect.left + joystickRect.width / 2;
+            joystickCenterY = joystickRect.top + joystickRect.height / 2;
+
+            let deltaX = clientX - joystickCenterX;
+            let deltaY = clientY - joystickCenterY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxRadius = joystickRect.width / 2 - joystick.offsetWidth / 2;
+            if (distance > maxRadius) {
+                deltaX = deltaX * maxRadius / distance;
+                deltaY = deltaY * maxRadius / distance;
+            }
+
+            joystick.style.left = (deltaX + joystickRect.width / 2 - joystick.offsetWidth / 2) + 'px';
+            joystick.style.top = (deltaY + joystickRect.height / 2 - joystick.offsetHeight / 2) + 'px';
+
+            targetLon += deltaX * 0.25;
+            targetLat -= deltaY * 0.25;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            joystickRect = document.getElementById('joystick-container').getBoundingClientRect();
+            joystickCenterX = joystickRect.left + joystickRect.width / 2;
+            joystickCenterY = joystickRect.top + joystickRect.height / 2;
+        }
+
+        function onPointerDown(event) {
+            if (event.target.id !== 'joystick' && event.target.id !== 'joystick-container') {
+                isUserInteracting = true;
+                onPointerDownMouseX = event.clientX;
+                onPointerDownMouseY = event.clientY;
+                onPointerDownLon = lon;
+                onPointerDownLat = lat;
+            }
+        }
+
+        function onPointerMove(event) {
+            if (isUserInteracting) {
+                targetLon = (onPointerDownMouseX - event.clientX) * 0.25 + onPointerDownLon;
+                targetLat = (event.clientY - onPointerDownMouseY) * 0.25 + onPointerDownLat;
+            }
+        }
+
+        function onPointerUp() {
+            isUserInteracting = false;
+        }
+
+        function onKeyDown(event) {
+            switch (event.keyCode) {
+                case 37: targetLon -= 5; break;
+                case 38: targetLat += 5; break;
+                case 39: targetLon += 5; break;
+                case 40: targetLat -= 5; break;
+            }
+        }
+
+        function updateCosmicEnvironment() {
+            time += 0.015;
+
+            cosmicLights[0].position.set(Math.cos(time) * 400, Math.sin(time * 0.8) * 250, Math.sin(time) * 400);
+            cosmicLights[1].position.set(Math.cos(time + 2) * 350, Math.sin(time * 0.9) * 200, Math.sin(time + 2) * 350);
+            cosmicLights[2].position.set(Math.cos(time + 4) * 380, Math.sin(time) * 230, Math.sin(time + 4) * 380);
+            cosmicLights[3].position.set(Math.sin(time + 1) * 360, Math.cos(time * 0.7) * 220, Math.cos(time + 1) * 360);
+
+            skyMaterial.uniforms.time.value = time;
+            skyMaterial.uniforms.pulseIntensity.value = 0.4 + Math.sin(time * 0.3) * 0.2;
+
+            scene.children.forEach(child => {
+                if (child.userData.speed) {
+                    child.position.x += child.userData.speed;
+                    child.position.y = fractalNoise(child.position.x, child.position.z) + 100 + Math.sin(time + child.userData.hover) * 10;
+                    if (child.position.x > ship.position.x + 400) child.position.x = ship.position.x - 400;
+                    child.scale.setScalar(1 + Math.sin(time * 2 + child.userData.hover) * 0.15);
+                }
+            });
+        }
+
+        function updateMovement() {
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+
+            if (keys.w) velocity.add(forward.multiplyScalar(accel));
+            if (keys.s) velocity.add(forward.multiplyScalar(-accel));
+            if (keys.a) velocity.add(right.multiplyScalar(-accel));
+            if (keys.d) velocity.add(right.multiplyScalar(accel));
+            if (keys.space) velocity.y += liftSpeed;
+
+            velocity.clampLength(0, maxSpeed);
+            velocity.multiplyScalar(friction);
+
+            ship.position.add(velocity);
+
+            ship.position.y += Math.sin(time * 2) * 0.05; // Softer hover
+            ship.rotation.x = THREE.MathUtils.lerp(ship.rotation.x, velocity.z * 0.15, 0.1); // Smoother tilt
+            ship.rotation.z = THREE.MathUtils.lerp(ship.rotation.z, -velocity.x * 0.15, 0.1);
+            ship.rotation.y += 0.05;
+
+            const offset = new THREE.Vector3(0, cameraHeight, cameraDistance).applyQuaternion(camera.quaternion);
+            camera.position.lerp(ship.position.clone().add(offset), 0.2); // Slightly faster camera catch-up
+
+            // Check boost timer
+            if (performance.now() > boostTimer) {
+                accel = baseAccel;
+                maxSpeed = baseMaxSpeed;
+            }
+
+            updateTerrainChunks();
+
+            const chunkX = Math.floor(ship.position.x / chunkSize);
+            const chunkZ = Math.floor(ship.position.z / chunkSize);
+            const ground = terrainChunks[`${chunkX},${chunkZ}`];
+            if (ground) {
+                const raycaster = new THREE.Raycaster(ship.position, new THREE.Vector3(0, -1, 0), 0, 20);
+                const intersects = raycaster.intersectObject(ground);
+                if (intersects.length > 0) {
+                    if (ship.position.y < intersects[0].point.y + 3) {
+                        ship.position.y = intersects[0].point.y + 3;
+                        velocity.y = Math.max(0, velocity.y);
+                    }
+                    const colors = ground.geometry.attributes.color || new THREE.Float32BufferAttribute(new Float32Array(ground.geometry.attributes.position.count * 3), 3);
+                    const shipX = Math.floor((ship.position.x - chunkX * chunkSize + chunkSize / 2) / chunkSize * 128);
+                    const shipZ = Math.floor((ship.position.z - chunkZ * chunkSize + chunkSize / 2) / chunkSize * 128);
+                    for (let i = 0; i < colors.count; i++) {
+                        const dx = Math.abs(i % 128 - shipX);
+                        const dz = Math.abs(Math.floor(i / 128) - shipZ);
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        const tint = Math.max(0, 1 - dist / 20);
+                        colors.setXYZ(i, 0.2 + tint * 0.1, 0.3 + tint * 0.2, 0.6 + tint * 0.2);
+                    }
+                    ground.geometry.setAttribute('color', colors);
+                    ground.geometry.attributes.color.needsUpdate = true;
+                }
+            }
+        }
+
+        function updateCamera() {
+            lon = THREE.MathUtils.lerp(lon, targetLon, 0.15);
+            lat = THREE.MathUtils.lerp(lat, targetLat, 0.15);
+            lat = Math.max(-85, Math.min(85, lat));
+
+            phi = THREE.MathUtils.degToRad(90 - lat);
+            theta = THREE.MathUtils.degToRad(lon);
+
+            const lookAt = new THREE.Vector3(
+                camera.position.x + Math.sin(phi) * Math.cos(theta),
+                camera.position.y + Math.cos(phi),
+                camera.position.z + Math.sin(phi) * Math.sin(theta)
+            );
+
+            camera.lookAt(lookAt);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateCosmicEnvironment();
+            updateMovement();
+            updateCamera();
+
+            renderer.render(scene, camera);
+        }
+
+        function updateProgress(percent) {
+            progressBar.style.width = percent + '%';
+        }
+
+        window.addEventListener('load', () => updateProgress(100));
+    </script>
+</body>
+</html>
