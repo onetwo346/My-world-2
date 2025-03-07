@@ -104,7 +104,7 @@
         </div>
     </div>
     <div id="instructions">
-        W/S: Thrust forward/back | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys: Rotate view | +/-: Zoom in/out
+        W/S: Thrust forward/back | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys: Rotate view | +/-: Zoom in/out | Space: Tap to lift, hold 3s+ and release to blast off
     </div>
     <canvas id="canvas"></canvas>
     <div id="joystick-container">
@@ -115,17 +115,17 @@
     <script>
         // Core variables
         let camera, scene, renderer, ship;
-        let skyMaterial, cosmicLights = [], trailParticles;
+        let skyMaterial, cosmicLights = [];
         let velocity = new THREE.Vector3();
-        const maxSpeed = 0.3, accel = 0.05, friction = 0.95;
-        let keys = { w: false, s: false, a: false, d: false };
+        const maxSpeed = 0.3, accel = 0.05, friction = 0.95, liftSpeed = 0.2, blastSpeed = 10;
+        let keys = { w: false, s: false, a: false, d: false, space: false };
         let isUserInteracting = false, onPointerDownMouseX = 0, onPointerDownMouseY = 0;
         let lon = 0, onPointerDownLon = 0, lat = 0, onPointerDownLat = 0;
         let targetLon = 0, targetLat = 0;
         let phi = 0, theta = 0;
         let joystick, joystickRect, joystickCenterX, joystickCenterY, joystickActive = false, joystickTouchId = null;
         let loadingElement, progressBar;
-        let time = 0;
+        let time = 0, spaceHoldTime = 0;
         let cameraDistance = 15, cameraHeight = 5; // Default camera offset
 
         // Improved noise for smoother terrain
@@ -309,19 +309,6 @@
             ring.position.y = -0.1;
             shipGroup.add(ring);
 
-            // Trail particles
-            const trailGeometry = new THREE.BufferGeometry();
-            const trailVertices = new Float32Array(300); // 100 particles * 3 coords
-            for (let i = 0; i < trailVertices.length; i += 3) {
-                trailVertices[i] = 0;
-                trailVertices[i + 1] = 0;
-                trailVertices[i + 2] = 0;
-            }
-            trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailVertices, 3));
-            const trailMaterial = new THREE.PointsMaterial({ color: 0xff00ff, size: 0.5, transparent: true, blending: THREE.AdditiveBlending });
-            trailParticles = new THREE.Points(trailGeometry, trailMaterial);
-            shipGroup.add(trailParticles);
-
             shipGroup.position.set(0, 10, 0);
             scene.add(shipGroup);
             ship = shipGroup;
@@ -393,6 +380,10 @@
                     case 'd': keys.d = true; break;
                     case '+': case '=': cameraDistance = Math.max(5, cameraDistance - 1); break; // Zoom in
                     case '-': cameraDistance = Math.min(30, cameraDistance + 1); break; // Zoom out
+                    case ' ': 
+                        keys.space = true; 
+                        spaceHoldTime = performance.now(); 
+                        break;
                 }
             });
             document.addEventListener('keyup', (e) => {
@@ -401,6 +392,13 @@
                     case 's': keys.s = false; break;
                     case 'a': keys.a = false; break;
                     case 'd': keys.d = false; break;
+                    case ' ': 
+                        keys.space = false; 
+                        const holdDuration = (performance.now() - spaceHoldTime) / 1000; // Seconds
+                        if (holdDuration >= 3) {
+                            velocity.y += blastSpeed; // Blast off
+                        }
+                        break;
                 }
             });
             document.addEventListener('keydown', onKeyDown);
@@ -524,9 +522,10 @@
             if (keys.s) velocity.add(forward.multiplyScalar(-accel));
             if (keys.a) velocity.add(right.multiplyScalar(-accel));
             if (keys.d) velocity.add(right.multiplyScalar(accel));
+            if (keys.space) velocity.y += liftSpeed; // Gentle lift on tap
 
             // Cap speed and apply friction
-            velocity.clampLength(0, maxSpeed);
+            velocity.clampLength(0, maxSpeed * 2); // Higher cap for blast off
             velocity.multiplyScalar(friction);
 
             // Update ship position
@@ -540,18 +539,6 @@
             ship.rotation.y += 0.05;
             ship.rotation.x = Math.sin(time * 2) * 0.1;
             ship.rotation.z = Math.cos(time * 2) * 0.1;
-
-            // Trail effect
-            const positions = trailParticles.geometry.attributes.position.array;
-            for (let i = positions.length - 3; i >= 3; i -= 3) {
-                positions[i] = positions[i - 3];
-                positions[i + 1] = positions[i - 2];
-                positions[i + 2] = positions[i - 1];
-            }
-            positions[0] = ship.position.x;
-            positions[1] = ship.position.y - 0.5;
-            positions[2] = ship.position.z;
-            trailParticles.geometry.attributes.position.needsUpdate = true;
 
             // Keep above terrain
             const ground = scene.children.find(child => child.isMesh && child.geometry.type === 'PlaneGeometry');
