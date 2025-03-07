@@ -14,12 +14,13 @@
             overflow: hidden;
             width: 100%;
             height: 100%;
-            font-family: 'Comic Sans MS', 'Arial', sans-serif;
+            font-family: 'Comic Sans MS', 'Arial', sans-serif; /* Comic vibe */
             background: #0a0a1e;
             color: #fff;
             touch-action: none;
         }
 
+        /* Intro Page Styles */
         #intro {
             position: absolute;
             width: 100%;
@@ -92,6 +93,7 @@
             letter-spacing: 2px;
         }
 
+        /* Game Styles */
         #canvas {
             position: absolute;
             top: 0;
@@ -99,7 +101,7 @@
             width: 100%;
             height: 100%;
             z-index: 1;
-            display: none;
+            display: none; /* Hidden until start */
         }
 
         #joystick-container {
@@ -182,12 +184,14 @@
     </style>
 </head>
 <body>
+    <!-- Intro Page -->
     <div id="intro">
         <h1>Cosmic Horizon</h1>
         <div id="start-button">Tap to Start</div>
         <div id="footer">Designed by Nana Kofi cosmoscoderr@gmail.com</div>
     </div>
 
+    <!-- Game Elements -->
     <div id="loading">
         <div>Loading Cosmic Horizon...</div>
         <div id="loading-progress">
@@ -195,7 +199,7 @@
         </div>
     </div>
     <div id="instructions">
-        W/S: Thrust forward/back (Double-tap W to boost) | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys: Rotate view | +/-: Zoom in/out | Space: Tap to lift, hold 3s+ to blast off
+        W/S: Thrust forward/back | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys: Rotate view | +/-: Zoom in/out | Space: Tap to lift, hold 3s+ and release to blast off
     </div>
     <canvas id="canvas"></canvas>
     <div id="joystick-container">
@@ -204,6 +208,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
+        // Intro to Game Transition
         const intro = document.getElementById('intro');
         const canvas = document.getElementById('canvas');
         const startButton = document.getElementById('start-button');
@@ -211,14 +216,14 @@
         startButton.addEventListener('click', () => {
             intro.style.display = 'none';
             canvas.style.display = 'block';
-            init();
+            init(); // Start the game
         });
 
+        // Core game variables
         let camera, scene, renderer, ship;
         let skyMaterial, cosmicLights = [];
         let velocity = new THREE.Vector3();
-        let baseAccel = 0.06, baseMaxSpeed = 0.35, friction = 0.97, liftSpeed = 0.2, blastSpeed = 10;
-        let accel = baseAccel, maxSpeed = baseMaxSpeed;
+        const maxSpeed = 0.35, accel = 0.06, friction = 0.97, liftSpeed = 0.2, blastSpeed = 10;
         let keys = { w: false, s: false, a: false, d: false, space: false };
         let isUserInteracting = false, onPointerDownMouseX = 0, onPointerDownMouseY = 0;
         let lon = 0, onPointerDownLon = 0, lat = 0, onPointerDownLat = 0;
@@ -226,11 +231,10 @@
         let phi = 0, theta = 0;
         let joystick, joystickRect, joystickCenterX, joystickCenterY, joystickActive = false, joystickTouchId = null;
         let loadingElement, progressBar;
-        let time = 0, spaceHoldTime = 0, lastWPress = 0, boostTimer = 0;
+        let time = 0, spaceHoldTime = 0;
         let cameraDistance = 15, cameraHeight = 5;
-        let terrainChunks = {};
-        const chunkSize = 2000;
 
+        // Enhanced noise for varied terrain
         function fractalNoise(x, z, octaves = 4) {
             let total = 0, frequency = 0.03, amplitude = 1, maxValue = 0;
             for (let i = 0; i < octaves; i++) {
@@ -247,6 +251,7 @@
             loadingElement = document.getElementById('loading');
             progressBar = document.getElementById('progress-bar');
 
+            // Scene setup
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
             camera.position.set(0, 10, 15);
@@ -257,12 +262,14 @@
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+            // Create environment
             createCosmicSky();
-            createInitialTerrain();
+            createTerrain();
             createShip();
             setupJoystick();
             setupControls();
 
+            // Event listeners
             window.addEventListener('resize', onWindowResize);
             document.addEventListener('pointerdown', onPointerDown);
             document.addEventListener('pointermove', onPointerMove);
@@ -346,17 +353,16 @@
             updateProgress(40);
         }
 
-        function createTerrainChunk(chunkX, chunkZ) {
-            const key = `${chunkX},${chunkZ}`;
-            if (terrainChunks[key]) return;
+        function createTerrain() {
+            updateProgress(50);
 
-            const groundGeometry = new THREE.PlaneGeometry(chunkSize, chunkSize, 128, 128);
+            const groundGeometry = new THREE.PlaneGeometry(2000, 2000, 256, 256);
             groundGeometry.rotateX(-Math.PI / 2);
             const vertices = groundGeometry.attributes.position.array;
             for (let i = 0; i < vertices.length; i += 3) {
-                const x = vertices[i] + chunkX * chunkSize;
-                const z = vertices[i + 2] + chunkZ * chunkSize;
-                vertices[i + 1] = fractalNoise(x, z);
+                const x = vertices[i], z = vertices[i + 2];
+                const distance = Math.sqrt(x * x + z * z);
+                vertices[i + 1] = fractalNoise(x, z) * (1 - Math.min(1, distance / 500));
             }
             groundGeometry.computeVertexNormals();
 
@@ -369,43 +375,11 @@
                 vertexColors: true
             });
             const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-            ground.position.set(chunkX * chunkSize, 0, chunkZ * chunkSize);
             ground.receiveShadow = true;
             scene.add(ground);
-            terrainChunks[key] = ground;
 
-            addEnvironmentDetailsToChunk(chunkX, chunkZ, ground);
-        }
-
-        function createInitialTerrain() {
-            updateProgress(50);
-            for (let x = -1; x <= 1; x++) {
-                for (let z = -1; z <= 1; z++) {
-                    createTerrainChunk(x, z);
-                }
-            }
+            addEnvironmentDetails();
             updateProgress(80);
-        }
-
-        function updateTerrainChunks() {
-            const chunkX = Math.floor(ship.position.x / chunkSize);
-            const chunkZ = Math.floor(ship.position.z / chunkSize);
-            const renderDistance = 1;
-
-            for (let x = chunkX - renderDistance; x <= chunkX + renderDistance; x++) {
-                for (let z = chunkZ - renderDistance; z <= chunkZ + renderDistance; z++) {
-                    createTerrainChunk(x, z);
-                }
-            }
-
-            // Clean up far chunks
-            for (let key in terrainChunks) {
-                const [cx, cz] = key.split(',').map(Number);
-                if (Math.abs(cx - chunkX) > renderDistance + 1 || Math.abs(cz - chunkZ) > renderDistance + 1) {
-                    scene.remove(terrainChunks[key]);
-                    delete terrainChunks[key];
-                }
-            }
         }
 
         function createShip() {
@@ -438,17 +412,12 @@
             updateProgress(90);
         }
 
-        function addEnvironmentDetailsToChunk(chunkX, chunkZ, ground) {
-            const chunkOffsetX = chunkX * chunkSize;
-            const chunkOffsetZ = chunkZ * chunkSize;
-
-            for (let i = 0; i < 5; i++) {
+        function addEnvironmentDetails() {
+            for (let i = 0; i < 25; i++) {
                 const orbGeometry = new THREE.SphereGeometry(Math.random() * 5 + 3, 16, 16);
                 const orbMaterial = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.75 });
                 const orb = new THREE.Mesh(orbGeometry, orbMaterial);
-                const x = chunkOffsetX + Math.random() * chunkSize - chunkSize / 2;
-                const z = chunkOffsetZ + Math.random() * chunkSize - chunkSize / 2;
-                orb.position.set(x, fractalNoise(x, z) + Math.random() * 60 + 20, z);
+                orb.position.set(Math.random() * 800 - 400, Math.random() * 60 + 100, Math.random() * 800 - 400);
                 orb.userData = { speed: Math.random() * 0.02 + 0.01, hover: Math.random() * 3 };
                 scene.add(orb);
             }
@@ -457,7 +426,7 @@
                 const baseGeometry = new THREE.CylinderGeometry(0.4, 0.6, 4, 8);
                 const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x3a5a7a, roughness: 0.65 });
                 const base = new THREE.Mesh(baseGeometry, baseMaterial);
-                base.position.set(x, fractalNoise(x, z) + 2, z);
+                base.position.set(x, 2, z);
                 base.castShadow = true;
 
                 const spireGeometry = new THREE.TetrahedronGeometry(2);
@@ -469,31 +438,29 @@
                     opacity: 0.9
                 });
                 const spire = new THREE.Mesh(spireGeometry, spireMaterial);
-                spire.position.set(x, fractalNoise(x, z) + 5, z);
+                spire.position.set(x, 5, z);
                 spire.castShadow = true;
                 spire.rotation.y = Math.random() * Math.PI;
 
                 scene.add(base, spire);
             }
 
-            for (let i = 0; i < 20; i++) {
-                const x = chunkOffsetX + Math.random() * chunkSize - chunkSize / 2;
-                const z = chunkOffsetZ + Math.random() * chunkSize - chunkSize / 2;
-                createSpire(x, z);
+            for (let i = 0; i < 100; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * 400 + 100;
+                createSpire(Math.cos(angle) * radius, Math.sin(angle) * radius);
             }
 
-            for (let i = 0; i < 3; i++) {
+            for (let i = 0; i < 10; i++) {
                 const poolGeometry = new THREE.CircleGeometry(10 + Math.random() * 5, 32);
                 const poolMaterial = new THREE.MeshBasicMaterial({ color: 0x00ccff, emissive: 0x00ccff, transparent: true, opacity: 0.6 });
                 const pool = new THREE.Mesh(poolGeometry, poolMaterial);
-                const x = chunkOffsetX + Math.random() * chunkSize - chunkSize / 2;
-                const z = chunkOffsetZ + Math.random() * chunkSize - chunkSize / 2;
                 pool.rotation.x = -Math.PI / 2;
-                pool.position.set(x, fractalNoise(x, z) + 0.1, z);
+                pool.position.set(Math.random() * 800 - 400, fractalNoise(pool.position.x, pool.position.z) + 0.1, Math.random() * 800 - 400);
                 scene.add(pool);
             }
 
-            for (let i = 0; i < 2; i++) {
+            for (let i = 0; i < 5; i++) {
                 const islandGeometry = new THREE.PlaneGeometry(20 + Math.random() * 10, 20 + Math.random() * 10, 16, 16);
                 islandGeometry.rotateX(-Math.PI / 2);
                 const vertices = islandGeometry.attributes.position.array;
@@ -503,9 +470,7 @@
                 islandGeometry.computeVertexNormals();
                 const islandMaterial = new THREE.MeshStandardMaterial({ color: 0x4a5a7a, roughness: 0.9 });
                 const island = new THREE.Mesh(islandGeometry, islandMaterial);
-                const x = chunkOffsetX + Math.random() * chunkSize - chunkSize / 2;
-                const z = chunkOffsetZ + Math.random() * chunkSize - chunkSize / 2;
-                island.position.set(x, fractalNoise(x, z) + 50 + Math.random() * 50, z);
+                island.position.set(Math.random() * 800 - 400, 50 + Math.random() * 50, Math.random() * 800 - 400);
                 island.castShadow = true;
                 island.receiveShadow = true;
                 scene.add(island);
@@ -528,16 +493,7 @@
         function setupControls() {
             document.addEventListener('keydown', (e) => {
                 switch (e.key.toLowerCase()) {
-                    case 'w': 
-                        keys.w = true; 
-                        const now = performance.now();
-                        if (now - lastWPress < 500) { // Double-tap within 0.5s
-                            accel = baseAccel * 2;
-                            maxSpeed = baseMaxSpeed * 2;
-                            boostTimer = now + 2000; // Boost for 2s
-                        }
-                        lastWPress = now;
-                        break;
+                    case 'w': keys.w = true; break;
                     case 's': keys.s = true; break;
                     case 'a': keys.a = true; break;
                     case 'd': keys.d = true; break;
@@ -667,8 +623,8 @@
             scene.children.forEach(child => {
                 if (child.userData.speed) {
                     child.position.x += child.userData.speed;
-                    child.position.y = fractalNoise(child.position.x, child.position.z) + 100 + Math.sin(time + child.userData.hover) * 10;
-                    if (child.position.x > ship.position.x + 400) child.position.x = ship.position.x - 400;
+                    child.position.y = 100 + Math.sin(time + child.userData.hover) * 10;
+                    if (child.position.x > 400) child.position.x = -400;
                     child.scale.setScalar(1 + Math.sin(time * 2 + child.userData.hover) * 0.15);
                 }
             });
@@ -684,30 +640,20 @@
             if (keys.d) velocity.add(right.multiplyScalar(accel));
             if (keys.space) velocity.y += liftSpeed;
 
-            velocity.clampLength(0, maxSpeed);
+            velocity.clampLength(0, maxSpeed * 2);
             velocity.multiplyScalar(friction);
 
             ship.position.add(velocity);
 
-            ship.position.y += Math.sin(time * 2) * 0.05; // Softer hover
-            ship.rotation.x = THREE.MathUtils.lerp(ship.rotation.x, velocity.z * 0.15, 0.1); // Smoother tilt
-            ship.rotation.z = THREE.MathUtils.lerp(ship.rotation.z, -velocity.x * 0.15, 0.1);
+            ship.position.y += Math.sin(time * 2) * 0.1;
+            ship.rotation.x = THREE.MathUtils.lerp(ship.rotation.x, velocity.z * 0.1, 0.1);
+            ship.rotation.z = THREE.MathUtils.lerp(ship.rotation.z, -velocity.x * 0.1, 0.1);
             ship.rotation.y += 0.05;
 
             const offset = new THREE.Vector3(0, cameraHeight, cameraDistance).applyQuaternion(camera.quaternion);
-            camera.position.lerp(ship.position.clone().add(offset), 0.2); // Slightly faster camera catch-up
+            camera.position.lerp(ship.position.clone().add(offset), 0.15);
 
-            // Check boost timer
-            if (performance.now() > boostTimer) {
-                accel = baseAccel;
-                maxSpeed = baseMaxSpeed;
-            }
-
-            updateTerrainChunks();
-
-            const chunkX = Math.floor(ship.position.x / chunkSize);
-            const chunkZ = Math.floor(ship.position.z / chunkSize);
-            const ground = terrainChunks[`${chunkX},${chunkZ}`];
+            const ground = scene.children.find(child => child.isMesh && child.geometry.type === 'PlaneGeometry');
             if (ground) {
                 const raycaster = new THREE.Raycaster(ship.position, new THREE.Vector3(0, -1, 0), 0, 20);
                 const intersects = raycaster.intersectObject(ground);
@@ -717,11 +663,11 @@
                         velocity.y = Math.max(0, velocity.y);
                     }
                     const colors = ground.geometry.attributes.color || new THREE.Float32BufferAttribute(new Float32Array(ground.geometry.attributes.position.count * 3), 3);
-                    const shipX = Math.floor((ship.position.x - chunkX * chunkSize + chunkSize / 2) / chunkSize * 128);
-                    const shipZ = Math.floor((ship.position.z - chunkZ * chunkSize + chunkSize / 2) / chunkSize * 128);
+                    const shipX = Math.floor((ship.position.x + 1000) / 2000 * 256);
+                    const shipZ = Math.floor((ship.position.z + 1000) / 2000 * 256);
                     for (let i = 0; i < colors.count; i++) {
-                        const dx = Math.abs(i % 128 - shipX);
-                        const dz = Math.abs(Math.floor(i / 128) - shipZ);
+                        const dx = Math.abs(i % 256 - shipX);
+                        const dz = Math.abs(Math.floor(i / 256) - shipZ);
                         const dist = Math.sqrt(dx * dx + dz * dz);
                         const tint = Math.max(0, 1 - dist / 20);
                         colors.setXYZ(i, 0.2 + tint * 0.1, 0.3 + tint * 0.2, 0.6 + tint * 0.2);
