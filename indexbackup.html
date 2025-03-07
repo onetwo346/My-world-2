@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cosmic Horizon: 3D Simulation</title>
+    <title>Cosmic Horizon: Saucer Explorer</title>
     <style>
         * {
             margin: 0;
@@ -105,7 +105,7 @@
         </div>
     </div>
     <div id="instructions">
-        W/S: Move forward/back | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys also rotate view
+        W/S: Thrust forward/back | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys: Rotate view | Explore in your saucer!
     </div>
     <canvas id="canvas"></canvas>
     <div id="joystick-container">
@@ -115,13 +115,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         // Core variables
-        let camera, scene, renderer;
+        let camera, scene, renderer, ship;
         let skyMaterial, cosmicLights = [];
         let velocity = new THREE.Vector3();
-        const moveSpeed = 0.15, friction = 0.92;
+        const maxSpeed = 0.3, accel = 0.05, friction = 0.95;
         let keys = { w: false, s: false, a: false, d: false };
         let isUserInteracting = false, onPointerDownMouseX = 0, onPointerDownMouseY = 0;
         let lon = 0, onPointerDownLon = 0, lat = 0, onPointerDownLat = 0;
+        let targetLon = 0, targetLat = 0;
         let phi = 0, theta = 0;
         let joystick, joystickRect, joystickCenterX, joystickCenterY, joystickActive = false, joystickTouchId = null;
         let loadingElement, progressBar;
@@ -136,7 +137,7 @@
                 amplitude *= 0.5;
                 frequency *= 2;
             }
-            return total / maxValue * 5; // Lower height for flatter terrain
+            return total / maxValue * 5;
         }
 
         init();
@@ -149,7 +150,7 @@
             // Scene setup
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1500);
-            camera.position.set(0, 3, 0); // Slightly higher for better view
+            camera.position.set(0, 10, 0); // Higher starting point for flying
 
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -160,6 +161,7 @@
             // Create environment
             createCosmicSky();
             createTerrain();
+            createShip();
             setupJoystick();
             setupControls();
 
@@ -199,11 +201,11 @@
                 varying vec3 vWorldPosition;
                 void main() {
                     vec3 dir = normalize(vWorldPosition);
-                    float noise = sin(dir.x * 3.0 + time) * cos(dir.y * 3.0 + time);
-                    vec3 color = mix(baseColor, vec3(0.8, 0.4, 0.6), noise * 0.5 + 0.5);
+                    float noise = sin(dir.x * 3.0 + time) * cos(dir.y * 3.0 + time) * 0.5;
+                    vec3 color = mix(baseColor, vec3(0.8, 0.4, 0.6), noise + 0.5);
                     float pulse = sin(time * 0.5 + dir.z * 5.0) * pulseIntensity;
                     vec3 finalColor = mix(color, vec3(1.0, 0.8, 0.4), pulse);
-                    gl_FragColor = vec4(finalColor, 1.0);
+                    gl_FragColor = vec4(finalColor * (1.0 + pulse * 0.3), 1.0);
                 }
             `;
 
@@ -216,7 +218,7 @@
             const sky = new THREE.Mesh(skyGeometry, skyMaterial);
             scene.add(sky);
 
-            // Cosmic lights (replacing sun/moon)
+            // Cosmic lights
             for (let i = 0; i < 3; i++) {
                 const lightGeometry = new THREE.SphereGeometry(8 - i * 2, 32, 32);
                 const lightMaterial = new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffaa88 : i === 1 ? 0x88ccff : 0xddaaff });
@@ -224,49 +226,51 @@
                 scene.add(light);
                 cosmicLights.push(light);
 
-                const pointLight = new THREE.PointLight(lightMaterial.color, 1.2, 800);
+                const pointLight = new THREE.PointLight(lightMaterial.color, 1.5, 800);
                 pointLight.castShadow = true;
+                pointLight.shadow.mapSize.width = 2048;
+                pointLight.shadow.mapSize.height = 2048;
                 light.add(pointLight);
             }
 
             // Nebula particles
             const particleGeometry = new THREE.BufferGeometry();
             const particleVertices = [];
-            for (let i = 0; i < 1500; i++) {
+            for (let i = 0; i < 2000; i++) {
                 const x = (Math.random() - 0.5) * 1200;
                 const y = Math.random() * 600 + 50;
                 const z = (Math.random() - 0.5) * 1200;
                 particleVertices.push(x, y, z);
             }
             particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particleVertices, 3));
-            const particleMaterial = new THREE.PointsMaterial({ color: 0xaaaaff, size: 1.5, transparent: true, blending: THREE.AdditiveBlending });
+            const particleMaterial = new THREE.PointsMaterial({ color: 0xaaaaff, size: 2, transparent: true, blending: THREE.AdditiveBlending });
             const particles = new THREE.Points(particleGeometry, particleMaterial);
             scene.add(particles);
 
-            scene.add(new THREE.AmbientLight(0x303050, 0.3));
+            scene.add(new THREE.AmbientLight(0x303050, 0.4));
             updateProgress(40);
         }
 
         function createTerrain() {
             updateProgress(50);
 
-            // Smooth, leveled terrain with cosmic tint
-            const groundGeometry = new THREE.PlaneGeometry(1000, 1000, 100, 100);
+            // Smooth terrain
+            const groundGeometry = new THREE.PlaneGeometry(1000, 1000, 128, 128);
             groundGeometry.rotateX(-Math.PI / 2);
             const vertices = groundGeometry.attributes.position.array;
             for (let i = 0; i < vertices.length; i += 3) {
                 const x = vertices[i], z = vertices[i + 2];
                 const distance = Math.sqrt(x * x + z * z);
-                vertices[i + 1] = fractalNoise(x, z) * (1 - Math.min(1, distance / 200)); // Flatter near center
+                vertices[i + 1] = fractalNoise(x, z) * (1 - Math.min(1, distance / 250));
             }
             groundGeometry.computeVertexNormals();
 
             const groundMaterial = new THREE.MeshStandardMaterial({
                 color: 0x2a3a5a,
-                roughness: 0.85,
-                metalness: 0.2,
+                roughness: 0.8,
+                metalness: 0.25,
                 emissive: 0x102030,
-                emissiveIntensity: 0.3
+                emissiveIntensity: 0.5
             });
             const ground = new THREE.Mesh(groundGeometry, groundMaterial);
             ground.receiveShadow = true;
@@ -278,43 +282,78 @@
             updateProgress(80);
         }
 
+        function createShip() {
+            // Funny old saucer shape
+            const shipGroup = new THREE.Group();
+
+            // Base (lopsided disc)
+            const baseGeometry = new THREE.CylinderGeometry(3, 2.5, 0.8, 32, 1, false, 0, Math.PI * 1.8);
+            const baseMaterial = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 50 });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.castShadow = true;
+            shipGroup.add(base);
+
+            // Dome (squashed sphere)
+            const domeGeometry = new THREE.SphereGeometry(1.5, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            const domeMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffaa, transparent: true, opacity: 0.8, shininess: 100 });
+            const dome = new THREE.Mesh(domeGeometry, domeMaterial);
+            dome.position.y = 0.8;
+            dome.castShadow = true;
+            shipGroup.add(dome);
+
+            // Glowy ring
+            const ringGeometry = new THREE.TorusGeometry(2, 0.2, 8, 32);
+            const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, emissive: 0xff00ff });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = -0.1;
+            shipGroup.add(ring);
+
+            shipGroup.position.copy(camera.position);
+            scene.add(shipGroup);
+            ship = shipGroup;
+
+            updateProgress(90);
+        }
+
         function addEnvironmentDetails() {
-            // Glowing orbs (replacing clouds)
-            for (let i = 0; i < 12; i++) {
-                const orbGeometry = new THREE.SphereGeometry(Math.random() * 5 + 3, 16, 16);
-                const orbMaterial = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.7 });
+            // Glowing orbs
+            for (let i = 0; i < 15; i++) {
+                const orbGeometry = new THREE.SphereGeometry(Math.random() * 4 + 2, 16, 16);
+                const orbMaterial = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.75 });
                 const orb = new THREE.Mesh(orbGeometry, orbMaterial);
                 orb.position.set(Math.random() * 400 - 200, Math.random() * 40 + 80, Math.random() * 400 - 200);
-                orb.userData = { speed: Math.random() * 0.02 + 0.01, hover: Math.random() * 2 };
+                orb.userData = { speed: Math.random() * 0.015 + 0.01, hover: Math.random() * 2 };
                 scene.add(orb);
             }
 
-            // Crystal spires (replacing trees)
+            // Crystal spires
             function createSpire(x, z) {
-                const baseGeometry = new THREE.CylinderGeometry(0.3, 0.5, 3, 6);
-                const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x3a5a7a, roughness: 0.7 });
+                const baseGeometry = new THREE.CylinderGeometry(0.3, 0.5, 3, 8);
+                const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x3a5a7a, roughness: 0.65 });
                 const base = new THREE.Mesh(baseGeometry, baseMaterial);
                 base.position.set(x, 1.5, z);
                 base.castShadow = true;
 
-                const spireGeometry = new THREE.TetrahedronGeometry(1.5);
+                const spireGeometry = new THREE.TetrahedronGeometry(1.8);
                 const spireMaterial = new THREE.MeshPhongMaterial({
                     color: 0x00aaff,
                     emissive: 0x0077cc,
-                    shininess: 90,
+                    shininess: 100,
                     transparent: true,
-                    opacity: 0.85
+                    opacity: 0.9
                 });
                 const spire = new THREE.Mesh(spireGeometry, spireMaterial);
-                spire.position.set(x, 4, z);
+                spire.position.set(x, 4.5, z);
                 spire.castShadow = true;
+                spire.rotation.y = Math.random() * Math.PI;
 
                 scene.add(base, spire);
             }
 
-            for (let i = 0; i < 50; i++) {
+            for (let i = 0; i < 60; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const radius = Math.random() * 150 + 50;
+                const radius = Math.random() * 200 + 50;
                 createSpire(Math.cos(angle) * radius, Math.sin(angle) * radius);
             }
         }
@@ -330,8 +369,6 @@
             document.addEventListener('pointermove', onJoystickMove, { passive: false });
             document.addEventListener('pointerup', onJoystickEnd);
             document.addEventListener('pointercancel', onJoystickEnd);
-
-            updateProgress(90);
         }
 
         function setupControls() {
@@ -351,7 +388,7 @@
                     case 'd': keys.d = false; break;
                 }
             });
-            document.addEventListener('keydown', onKeyDown); // Keep arrow keys for rotation
+            document.addEventListener('keydown', onKeyDown);
         }
 
         function onJoystickStart(event) {
@@ -397,8 +434,8 @@
             joystick.style.left = (deltaX + joystickRect.width / 2 - joystick.offsetWidth / 2) + 'px';
             joystick.style.top = (deltaY + joystickRect.height / 2 - joystick.offsetHeight / 2) + 'px';
 
-            lon += deltaX * 0.15;
-            lat -= deltaY * 0.15;
+            targetLon += deltaX * 0.25;
+            targetLat -= deltaY * 0.25;
         }
 
         function onWindowResize() {
@@ -422,8 +459,8 @@
 
         function onPointerMove(event) {
             if (isUserInteracting) {
-                lon = (onPointerDownMouseX - event.clientX) * 0.15 + onPointerDownLon;
-                lat = (event.clientY - onPointerDownMouseY) * 0.15 + onPointerDownLat;
+                targetLon = (onPointerDownMouseX - event.clientX) * 0.25 + onPointerDownLon;
+                targetLat = (event.clientY - onPointerDownMouseY) * 0.25 + onPointerDownLat;
             }
         }
 
@@ -433,17 +470,17 @@
 
         function onKeyDown(event) {
             switch (event.keyCode) {
-                case 37: lon -= 3; break; // Left
-                case 38: lat += 3; break; // Up
-                case 39: lon += 3; break; // Right
-                case 40: lat -= 3; break; // Down
+                case 37: targetLon -= 5; break; // Left
+                case 38: targetLat += 5; break; // Up
+                case 39: targetLon += 5; break; // Right
+                case 40: targetLat -= 5; break; // Down
             }
         }
 
         function updateCosmicEnvironment() {
             time += 0.015;
 
-            // Cosmic lights dance
+            // Cosmic lights
             cosmicLights[0].position.set(Math.cos(time) * 300, Math.sin(time * 0.8) * 200, Math.sin(time) * 300);
             cosmicLights[1].position.set(Math.cos(time + 2) * 250, Math.sin(time * 0.9) * 180, Math.sin(time + 2) * 250);
             cosmicLights[2].position.set(Math.cos(time + 4) * 280, Math.sin(time) * 220, Math.sin(time + 4) * 280);
@@ -456,8 +493,9 @@
             scene.children.forEach(child => {
                 if (child.userData.speed) {
                     child.position.x += child.userData.speed;
-                    child.position.y = 80 + Math.sin(time + child.userData.hover) * 10;
+                    child.position.y = 80 + Math.sin(time + child.userData.hover) * 8;
                     if (child.position.x > 200) child.position.x = -200;
+                    child.scale.setScalar(1 + Math.sin(time * 2 + child.userData.hover) * 0.1);
                 }
             });
         }
@@ -466,39 +504,60 @@
             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
             const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
 
-            if (keys.w) velocity.add(forward.multiplyScalar(moveSpeed));
-            if (keys.s) velocity.add(forward.multiplyScalar(-moveSpeed));
-            if (keys.a) velocity.add(right.multiplyScalar(-moveSpeed));
-            if (keys.d) velocity.add(right.multiplyScalar(moveSpeed));
+            // Apply thrust
+            if (keys.w) velocity.add(forward.multiplyScalar(accel));
+            if (keys.s) velocity.add(forward.multiplyScalar(-accel));
+            if (keys.a) velocity.add(right.multiplyScalar(-accel));
+            if (keys.d) velocity.add(right.multiplyScalar(accel));
 
+            // Cap speed and apply friction
+            velocity.clampLength(0, maxSpeed);
             velocity.multiplyScalar(friction);
-            camera.position.add(velocity);
 
-            // Terrain collision
+            // Update ship and camera position
+            ship.position.add(velocity);
+            camera.position.lerp(ship.position.clone().add(new THREE.Vector3(0, 2, 5)), 0.1); // Camera lags slightly behind
+
+            // Ship wobble and spin
+            ship.rotation.y += 0.05; // Spin
+            ship.rotation.x = Math.sin(time * 2) * 0.1; // Wobble
+            ship.rotation.z = Math.cos(time * 2) * 0.1;
+
+            // Keep above terrain
             const ground = scene.children.find(child => child.isMesh && child.geometry.type === 'PlaneGeometry');
             if (ground) {
-                const raycaster = new THREE.Raycaster(camera.position, new THREE.Vector3(0, -1, 0), 0, 10);
+                const raycaster = new THREE.Raycaster(ship.position, new THREE.Vector3(0, -1, 0), 0, 10);
                 const intersects = raycaster.intersectObject(ground);
-                if (intersects.length > 0) {
-                    camera.position.y = Math.max(camera.position.y, intersects[0].point.y + 3);
+                if (intersects.length > 0 && ship.position.y < intersects[0].point.y + 3) {
+                    ship.position.y = intersects[0].point.y + 3;
+                    velocity.y = Math.max(0, velocity.y);
                 }
             }
+        }
+
+        function updateCamera() {
+            // Smooth rotation
+            lon = THREE.MathUtils.lerp(lon, targetLon, 0.15);
+            lat = THREE.MathUtils.lerp(lat, targetLat, 0.15);
+            lat = Math.max(-85, Math.min(85, lat));
+
+            phi = THREE.MathUtils.degToRad(90 - lat);
+            theta = THREE.MathUtils.degToRad(lon);
+
+            const lookAt = new THREE.Vector3(
+                camera.position.x + Math.sin(phi) * Math.cos(theta),
+                camera.position.y + Math.cos(phi),
+                camera.position.z + Math.sin(phi) * Math.sin(theta)
+            );
+
+            camera.lookAt(lookAt);
         }
 
         function animate() {
             requestAnimationFrame(animate);
             updateCosmicEnvironment();
             updateMovement();
-
-            lat = Math.max(-85, Math.min(85, lat));
-            phi = THREE.MathUtils.degToRad(90 - lat);
-            theta = THREE.MathUtils.degToRad(lon);
-
-            camera.lookAt(
-                camera.position.x + Math.sin(phi) * Math.cos(theta),
-                camera.position.y + Math.cos(phi),
-                camera.position.z + Math.sin(phi) * Math.sin(theta)
-            );
+            updateCamera();
 
             renderer.render(scene, camera);
         }
