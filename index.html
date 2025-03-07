@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cosmic Plains: Interstellar Simulation</title>
+    <title>Cosmic Horizon: 3D Simulation</title>
     <style>
         * {
             margin: 0;
@@ -14,7 +14,7 @@
             overflow: hidden;
             width: 100%;
             height: 100%;
-            font-family: 'Arial', sans-serif;
+            font-family: Arial, sans-serif;
             touch-action: none;
             background: #0a0a1e;
         }
@@ -28,11 +28,11 @@
         }
         #joystick-container {
             position: absolute;
-            bottom: 20px;
-            right: 20px;
+            bottom: 30px;
+            right: 30px;
             width: 100px;
             height: 100px;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.2), rgba(0, 0, 50, 0.5));
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.3), rgba(0, 0, 50, 0.5));
             border-radius: 50%;
             z-index: 10;
             touch-action: none;
@@ -60,12 +60,12 @@
             background: linear-gradient(135deg, #0a0a1e, #1e1e3c);
             color: #fff;
             z-index: 100;
-            font-size: 28px;
+            font-size: 24px;
             text-shadow: 0 0 5px #00d4ff;
         }
         #loading-progress {
             width: 80%;
-            max-width: 400px;
+            max-width: 300px;
             height: 20px;
             background: rgba(255, 255, 255, 0.1);
             margin-top: 20px;
@@ -87,25 +87,24 @@
             border-radius: 5px;
             color: #fff;
             z-index: 10;
-            max-width: 350px;
-            font-size: 16px;
+            max-width: 300px;
             text-shadow: 0 0 3px #00d4ff;
         }
         @media (max-width: 768px) {
-            #joystick-container { bottom: 15px; right: 15px; }
-            #instructions { font-size: 12px; max-width: 250px; }
+            #joystick-container { bottom: 20px; right: 20px; }
+            #instructions { font-size: 14px; max-width: 250px; }
         }
     </style>
 </head>
 <body>
     <div id="loading">
-        <div>Initializing Cosmic Plains...</div>
+        <div>Loading Cosmic Horizon...</div>
         <div id="loading-progress">
             <div id="progress-bar"></div>
         </div>
     </div>
     <div id="instructions">
-        W/S: Move forward/back | A/D: Strafe | Mouse/Joystick: Look around | Explore the cosmic plains!
+        W/S: Move forward/back | A/D: Strafe | Joystick/Mouse: Look around | Arrow keys also rotate view
     </div>
     <canvas id="canvas"></canvas>
     <div id="joystick-container">
@@ -116,17 +115,19 @@
     <script>
         // Core variables
         let camera, scene, renderer;
-        let skyMaterial, twinSuns = [], riftParticles;
+        let skyMaterial, cosmicLights = [];
         let velocity = new THREE.Vector3();
-        const moveSpeed = 0.1, friction = 0.95;
+        const moveSpeed = 0.15, friction = 0.92;
         let keys = { w: false, s: false, a: false, d: false };
-        let isUserInteracting = false, lon = 0, lat = 0, phi = 0, theta = 0;
+        let isUserInteracting = false, onPointerDownMouseX = 0, onPointerDownMouseY = 0;
+        let lon = 0, onPointerDownLon = 0, lat = 0, onPointerDownLat = 0;
+        let phi = 0, theta = 0;
         let joystick, joystickRect, joystickCenterX, joystickCenterY, joystickActive = false, joystickTouchId = null;
         let loadingElement, progressBar;
         let time = 0;
 
-        // Improved fractal noise for terrain
-        function fractalNoise(x, z, octaves = 4) {
+        // Improved noise for smoother terrain
+        function fractalNoise(x, z, octaves = 3) {
             let total = 0, frequency = 0.05, amplitude = 1, maxValue = 0;
             for (let i = 0; i < octaves; i++) {
                 total += Math.sin(x * frequency) * Math.cos(z * frequency) * amplitude;
@@ -134,7 +135,7 @@
                 amplitude *= 0.5;
                 frequency *= 2;
             }
-            return total / maxValue * 10;
+            return total / maxValue * 5; // Lower height for flatter terrain
         }
 
         init();
@@ -146,8 +147,8 @@
 
             // Scene setup
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-            camera.position.set(0, 5, 0); // Slightly elevated
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1500);
+            camera.position.set(0, 3, 0); // Slightly higher for better view
 
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -155,9 +156,9 @@
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-            // Create cosmic environment
+            // Create environment
             createCosmicSky();
-            createLivingTerrain();
+            createTerrain();
             setupJoystick();
             setupControls();
 
@@ -173,14 +174,14 @@
         function createCosmicSky() {
             updateProgress(10);
 
-            // Cosmic void with shader magic
-            const skyGeometry = new THREE.SphereGeometry(1000, 64, 64);
+            // Cosmic sky with dynamic shader
+            const skyGeometry = new THREE.SphereGeometry(1000, 60, 40);
             skyGeometry.scale(-1, 1, 1);
 
             const uniforms = {
                 time: { value: 0 },
-                nebulaColor: { value: new THREE.Vector3(0.1, 0.3, 0.8) },
-                riftIntensity: { value: 0.5 }
+                baseColor: { value: new THREE.Vector3(0.05, 0.1, 0.3) },
+                pulseIntensity: { value: 0.5 }
             };
 
             const vertexShader = `
@@ -192,15 +193,15 @@
             `;
             const fragmentShader = `
                 uniform float time;
-                uniform vec3 nebulaColor;
-                uniform float riftIntensity;
+                uniform vec3 baseColor;
+                uniform float pulseIntensity;
                 varying vec3 vWorldPosition;
                 void main() {
                     vec3 dir = normalize(vWorldPosition);
-                    float noise = sin(dir.x * 5.0 + time) * cos(dir.y * 5.0 + time);
-                    vec3 baseColor = mix(nebulaColor, vec3(0.8, 0.1, 0.5), noise * 0.5 + 0.5);
-                    float rift = pow(abs(sin(dir.z * 10.0 + time * 2.0)), 10.0) * riftIntensity;
-                    vec3 finalColor = mix(baseColor, vec3(1.0, 0.8, 0.2), rift);
+                    float noise = sin(dir.x * 3.0 + time) * cos(dir.y * 3.0 + time);
+                    vec3 color = mix(baseColor, vec3(0.8, 0.4, 0.6), noise * 0.5 + 0.5);
+                    float pulse = sin(time * 0.5 + dir.z * 5.0) * pulseIntensity;
+                    vec3 finalColor = mix(color, vec3(1.0, 0.8, 0.4), pulse);
                     gl_FragColor = vec4(finalColor, 1.0);
                 }
             `;
@@ -214,86 +215,107 @@
             const sky = new THREE.Mesh(skyGeometry, skyMaterial);
             scene.add(sky);
 
-            // Twin suns
-            for (let i = 0; i < 2; i++) {
-                const sunGeometry = new THREE.SphereGeometry(15 - i * 5, 32, 32);
-                const sunMaterial = new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffddaa : 0xaaddff });
-                const sun = new THREE.Mesh(sunGeometry, sunMaterial);
-                scene.add(sun);
-                twinSuns.push(sun);
-
-                const light = new THREE.PointLight(i === 0 ? 0xffddaa : 0xaaddff, 1.5, 1000);
-                light.castShadow = true;
+            // Cosmic lights (replacing sun/moon)
+            for (let i = 0; i < 3; i++) {
+                const lightGeometry = new THREE.SphereGeometry(8 - i * 2, 32, 32);
+                const lightMaterial = new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffaa88 : i === 1 ? 0x88ccff : 0xddaaff });
+                const light = new THREE.Mesh(lightGeometry, lightMaterial);
                 scene.add(light);
-                sun.add(light);
+                cosmicLights.push(light);
+
+                const pointLight = new THREE.PointLight(lightMaterial.color, 1.2, 800);
+                pointLight.castShadow = true;
+                light.add(pointLight);
             }
 
-            // Rift particles
+            // Nebula particles
             const particleGeometry = new THREE.BufferGeometry();
             const particleVertices = [];
-            for (let i = 0; i < 2000; i++) {
-                const x = (Math.random() - 0.5) * 1500;
-                const y = (Math.random() - 0.5) * 1500;
-                const z = (Math.random() - 0.5) * 1500;
+            for (let i = 0; i < 1500; i++) {
+                const x = (Math.random() - 0.5) * 1200;
+                const y = Math.random() * 600 + 50;
+                const z = (Math.random() - 0.5) * 1200;
                 particleVertices.push(x, y, z);
             }
             particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particleVertices, 3));
-            const particleMaterial = new THREE.PointsMaterial({ color: 0xffccaa, size: 2, transparent: true, blending: THREE.AdditiveBlending });
-            riftParticles = new THREE.Points(particleGeometry, particleMaterial);
-            scene.add(riftParticles);
+            const particleMaterial = new THREE.PointsMaterial({ color: 0xaaaaff, size: 1.5, transparent: true, blending: THREE.AdditiveBlending });
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            scene.add(particles);
 
-            scene.add(new THREE.AmbientLight(0x404060, 0.2));
+            scene.add(new THREE.AmbientLight(0x303050, 0.3));
             updateProgress(40);
         }
 
-        function createLivingTerrain() {
+        function createTerrain() {
             updateProgress(50);
 
-            // Dynamic starlit terrain
-            const groundGeometry = new THREE.PlaneGeometry(2000, 2000, 128, 128);
+            // Smooth, leveled terrain with cosmic tint
+            const groundGeometry = new THREE.PlaneGeometry(1000, 1000, 100, 100);
             groundGeometry.rotateX(-Math.PI / 2);
             const vertices = groundGeometry.attributes.position.array;
             for (let i = 0; i < vertices.length; i += 3) {
                 const x = vertices[i], z = vertices[i + 2];
-                vertices[i + 1] = fractalNoise(x, z) * (1 - Math.min(1, Math.sqrt(x * x + z * z) / 1000));
+                const distance = Math.sqrt(x * x + z * z);
+                vertices[i + 1] = fractalNoise(x, z) * (1 - Math.min(1, distance / 200)); // Flatter near center
             }
             groundGeometry.computeVertexNormals();
 
             const groundMaterial = new THREE.MeshStandardMaterial({
-                color: 0x1a2a5a,
-                roughness: 0.8,
-                metalness: 0.3,
-                emissive: 0x102040,
-                emissiveIntensity: 0.5
+                color: 0x2a3a5a,
+                roughness: 0.85,
+                metalness: 0.2,
+                emissive: 0x102030,
+                emissiveIntensity: 0.3
             });
             const ground = new THREE.Mesh(groundGeometry, groundMaterial);
             ground.receiveShadow = true;
             scene.add(ground);
 
-            // Cosmic flora
-            function createCosmicCrystal(x, z) {
-                const crystalGeometry = new THREE.TetrahedronGeometry(Math.random() * 2 + 1);
-                const crystalMaterial = new THREE.MeshPhongMaterial({
-                    color: 0x00d4ff,
-                    emissive: 0x00aaff,
-                    shininess: 100,
-                    transparent: true,
-                    opacity: 0.9
-                });
-                const crystal = new THREE.Mesh(crystalGeometry, crystalMaterial);
-                crystal.position.set(x, fractalNoise(x, z) + 1, z);
-                crystal.castShadow = true;
-                crystal.rotation.y = Math.random() * Math.PI;
-                scene.add(crystal);
-            }
-
-            for (let i = 0; i < 100; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const radius = Math.random() * 800 + 100;
-                createCosmicCrystal(Math.cos(angle) * radius, Math.sin(angle) * radius);
-            }
+            // Enhanced environment details
+            addEnvironmentDetails();
 
             updateProgress(80);
+        }
+
+        function addEnvironmentDetails() {
+            // Glowing orbs (replacing clouds)
+            for (let i = 0; i < 12; i++) {
+                const orbGeometry = new THREE.SphereGeometry(Math.random() * 5 + 3, 16, 16);
+                const orbMaterial = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.7 });
+                const orb = new THREE.Mesh(orbGeometry, orbMaterial);
+                orb.position.set(Math.random() * 400 - 200, Math.random() * 40 + 80, Math.random() * 400 - 200);
+                orb.userData = { speed: Math.random() * 0.02 + 0.01, hover: Math.random() * 2 };
+                scene.add(orb);
+            }
+
+            // Crystal spires (replacing trees)
+            function createSpire(x, z) {
+                const baseGeometry = new THREE.CylinderGeometry(0.3, 0.5, 3, 6);
+                const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x3a5a7a, roughness: 0.7 });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.set(x, 1.5, z);
+                base.castShadow = true;
+
+                const spireGeometry = new THREE.TetrahedronGeometry(1.5);
+                const spireMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x00aaff,
+                    emissive: 0x0077cc,
+                    shininess: 90,
+                    transparent: true,
+                    opacity: 0.85
+                });
+                const spire = new THREE.Mesh(spireGeometry, spireMaterial);
+                spire.position.set(x, 4, z);
+                spire.castShadow = true;
+
+                scene.add(base, spire);
+            }
+
+            for (let i = 0; i < 50; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * 150 + 50;
+                createSpire(Math.cos(angle) * radius, Math.sin(angle) * radius);
+            }
         }
 
         function setupJoystick() {
@@ -313,7 +335,7 @@
 
         function setupControls() {
             document.addEventListener('keydown', (e) => {
-                switch (e.key) {
+                switch (e.key.toLowerCase()) {
                     case 'w': keys.w = true; break;
                     case 's': keys.s = true; break;
                     case 'a': keys.a = true; break;
@@ -321,13 +343,14 @@
                 }
             });
             document.addEventListener('keyup', (e) => {
-                switch (e.key) {
+                switch (e.key.toLowerCase()) {
                     case 'w': keys.w = false; break;
                     case 's': keys.s = false; break;
                     case 'a': keys.a = false; break;
                     case 'd': keys.d = false; break;
                 }
             });
+            document.addEventListener('keydown', onKeyDown); // Keep arrow keys for rotation
         }
 
         function onJoystickStart(event) {
@@ -373,8 +396,8 @@
             joystick.style.left = (deltaX + joystickRect.width / 2 - joystick.offsetWidth / 2) + 'px';
             joystick.style.top = (deltaY + joystickRect.height / 2 - joystick.offsetHeight / 2) + 'px';
 
-            lon += deltaX * 0.1;
-            lat -= deltaY * 0.1;
+            lon += deltaX * 0.15;
+            lat -= deltaY * 0.15;
         }
 
         function onWindowResize() {
@@ -398,8 +421,8 @@
 
         function onPointerMove(event) {
             if (isUserInteracting) {
-                lon = (onPointerDownMouseX - event.clientX) * 0.1 + onPointerDownLon;
-                lat = (event.clientY - onPointerDownMouseY) * 0.1 + onPointerDownLat;
+                lon = (onPointerDownMouseX - event.clientX) * 0.15 + onPointerDownLon;
+                lat = (event.clientY - onPointerDownMouseY) * 0.15 + onPointerDownLat;
             }
         }
 
@@ -407,38 +430,35 @@
             isUserInteracting = false;
         }
 
-        function updateCosmicEnvironment() {
-            time += 0.01;
+        function onKeyDown(event) {
+            switch (event.keyCode) {
+                case 37: lon -= 3; break; // Left
+                case 38: lat += 3; break; // Up
+                case 39: lon += 3; break; // Right
+                case 40: lat -= 3; break; // Down
+            }
+        }
 
-            // Twin suns orbit
-            twinSuns[0].position.set(Math.cos(time) * 400, Math.sin(time * 0.7) * 300, Math.sin(time) * 400);
-            twinSuns[1].position.set(Math.cos(time + Math.PI) * 350, Math.sin(time * 0.9) * 250, Math.sin(time + Math.PI) * 350);
+        function updateCosmicEnvironment() {
+            time += 0.015;
+
+            // Cosmic lights dance
+            cosmicLights[0].position.set(Math.cos(time) * 300, Math.sin(time * 0.8) * 200, Math.sin(time) * 300);
+            cosmicLights[1].position.set(Math.cos(time + 2) * 250, Math.sin(time * 0.9) * 180, Math.sin(time + 2) * 250);
+            cosmicLights[2].position.set(Math.cos(time + 4) * 280, Math.sin(time) * 220, Math.sin(time + 4) * 280);
 
             // Sky pulsation
             skyMaterial.uniforms.time.value = time;
-            skyMaterial.uniforms.riftIntensity.value = 0.5 + Math.sin(time * 0.5) * 0.3;
+            skyMaterial.uniforms.pulseIntensity.value = 0.4 + Math.sin(time * 0.3) * 0.2;
 
-            // Rift particle drift
-            const positions = riftParticles.geometry.attributes.position.array;
-            for (let i = 0; i < positions.length; i += 3) {
-                positions[i] += Math.sin(time + positions[i + 1]) * 0.02;
-                positions[i + 1] += Math.cos(time + positions[i]) * 0.01;
-                if (positions[i] > 750) positions[i] = -750;
-                if (positions[i + 1] > 750) positions[i + 1] = -750;
-            }
-            riftParticles.geometry.attributes.position.needsUpdate = true;
-
-            // Terrain ripple
-            const ground = scene.children.find(child => child.isMesh && child.geometry.type === 'PlaneGeometry');
-            if (ground) {
-                const vertices = ground.geometry.attributes.position.array;
-                for (let i = 0; i < vertices.length; i += 3) {
-                    const x = vertices[i], z = vertices[i + 2];
-                    vertices[i + 1] = fractalNoise(x + time * 0.1, z) * (1 - Math.min(1, Math.sqrt(x * x + z * z) / 1000));
+            // Orb movement
+            scene.children.forEach(child => {
+                if (child.userData.speed) {
+                    child.position.x += child.userData.speed;
+                    child.position.y = 80 + Math.sin(time + child.userData.hover) * 10;
+                    if (child.position.x > 200) child.position.x = -200;
                 }
-                ground.geometry.attributes.position.needsUpdate = true;
-                ground.geometry.computeVertexNormals();
-            }
+            });
         }
 
         function updateMovement() {
@@ -453,13 +473,13 @@
             velocity.multiplyScalar(friction);
             camera.position.add(velocity);
 
-            // Keep camera above terrain
+            // Terrain collision
             const ground = scene.children.find(child => child.isMesh && child.geometry.type === 'PlaneGeometry');
             if (ground) {
                 const raycaster = new THREE.Raycaster(camera.position, new THREE.Vector3(0, -1, 0), 0, 10);
                 const intersects = raycaster.intersectObject(ground);
                 if (intersects.length > 0) {
-                    camera.position.y = Math.max(camera.position.y, intersects[0].point.y + 2);
+                    camera.position.y = Math.max(camera.position.y, intersects[0].point.y + 3);
                 }
             }
         }
